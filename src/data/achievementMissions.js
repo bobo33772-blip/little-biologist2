@@ -1,0 +1,40 @@
+const badge = (file) => `/badges/${file}`
+
+export const ACHIEVEMENT_MISSIONS = [
+  { id: 'achievement-1-1', title: '첫 번째 발견', desc: '목장에서 처음 곤충 등록', event: 'ranch_insect_found', goal: 1, counter: 'ranchDiscoveries', badgeName: '첫 발견 배지', badgeImage: badge('1-1 첫 번째 발견.png') },
+  { id: 'achievement-1-2', title: '발견의 즐거움', desc: '목장에서 누적 10회 곤충 등록', event: 'ranch_insect_found', goal: 10, counter: 'ranchDiscoveries', badgeName: '발견 전문가 배지', badgeImage: badge('1-2 발견의 즐거움.png') },
+  { id: 'achievement-1-3', title: '발견왕', desc: '목장에서 누적 50회 곤충 등록', event: 'ranch_insect_found', goal: 50, counter: 'ranchDiscoveries', badgeName: '위대한 발견 배지', badgeImage: badge('1-3 발견왕.png') },
+  { id: 'achievement-2-1', title: '도감의 첫 페이지', desc: '곤충 1종 그림 등록하기', event: 'drawing_register', goal: 1, counter: 'drawings', badgeName: '그림 입문 배지', badgeImage: badge('2-1 도감의 첫 페이지.png') },
+  { id: 'achievement-2-2', title: '채워지는 도감', desc: '곤충 10종 그림 등록하기', event: 'drawing_register', goal: 10, counter: 'drawings', badgeName: '그림 수집 배지', badgeImage: badge('2-2 채워지는 도감.png') },
+  { id: 'achievement-2-3', title: '지식으로 가득 찬 도감', desc: '곤충 30종 그림 등록하기', event: 'drawing_register', goal: 30, counter: 'drawings', badgeName: '그림 전문가 배지', badgeImage: badge('2-3 지식으로 가득찬 도감.png') },
+  { id: 'achievement-3-1', title: '탐험의 시작', desc: '첫 탐험 완료하기', event: 'exploration_complete', goal: 1, counter: 'explorations', badgeName: '새싹 탐험가 배지', badgeImage: badge('3-1 탐험의 시작.png') },
+  { id: 'achievement-3-2', title: '탐험은 계속된다', desc: '탐험 20회 완료하기', event: 'exploration_complete', goal: 20, counter: 'explorations', badgeName: '숙련 탐험가 배지', badgeImage: badge('3-2 탐험은 계속된다.png') },
+  { id: 'achievement-3-3', title: '끝없는 모험', desc: '탐험 50회 완료하기', event: 'exploration_complete', goal: 50, counter: 'explorations', badgeName: '전설 탐험가 배지', badgeImage: badge('3-3 끝없는 모험.png') },
+  { id: 'achievement-4-1', title: '첫 번째 조사', desc: '곤충 1종 사진 등록하기', event: 'photo_register', goal: 1, counter: 'photos', badgeName: '사진 입문 배지', badgeImage: badge('4-1 첫 번째 서식지 조사.png') },
+  { id: 'achievement-4-2', title: '다양한 환경', desc: '곤충 10종 사진 등록하기', event: 'photo_register', goal: 10, counter: 'photos', badgeName: '사진 수집 배지', badgeImage: badge('4-2 다양한 환경.png') },
+  { id: 'achievement-4-3', title: '모든 곳을 살펴본 자', desc: '곤충 30종 사진 등록하기', event: 'photo_register', goal: 30, counter: 'photos', badgeName: '사진 전문가 배지', badgeImage: badge('4-3 모든 곳을 살펴본 자.png') },
+  { id: 'achievement-5-1', title: '작은 수집가', desc: '곤충 5종 도감 등록하기', event: 'field_guide_register', goal: 5, counter: 'registeredSpecies', badgeName: '작은 수집가 배지', badgeImage: badge('5-1 작은 수집가.png') },
+  { id: 'achievement-5-2', title: '전문 수집가', desc: '곤충 20종 도감 등록하기', event: 'field_guide_register', goal: 20, counter: 'registeredSpecies', badgeName: '전문 수집가 배지', badgeImage: badge('5-2 전문 수집가.png') },
+  { id: 'achievement-5-3', title: '곤충 컬렉션 완성자', desc: '곤충 50종 도감 등록하기', event: 'field_guide_register', goal: 50, counter: 'registeredSpecies', badgeName: '컬렉션 완성 배지', badgeImage: badge('5-3 곤충 컬렉션 완성자.png') },
+  { id: 'achievement-6-1', title: '곤충 입문자', desc: '곤충 5종 모든 랭크 달성', event: 'rank_up', goal: 5, counter: 'allRanksSpecies', badgeName: '곤충 입문자 배지', badgeImage: badge('6-1 곤충 입문자.png') },
+  { id: 'achievement-6-2', title: '곤충 중급자', desc: '곤충 10종 모든 랭크 달성', event: 'rank_up', goal: 10, counter: 'allRanksSpecies', badgeName: '곤충 중급자 배지', badgeImage: badge('6-2 곤충 중급자.png') },
+  { id: 'achievement-6-3', title: '곤충 전문가', desc: '곤충 20종 모든 랭크 달성', event: 'rank_up', goal: 20, counter: 'allRanksSpecies', badgeName: '곤충 마스터 배지', badgeImage: badge('6-3 곤충 전문가.png') },
+  { id: 'achievement-7-1', title: '알에서 깨어난 친구', desc: '알 1개 부화시키기', event: 'egg_hatched', goal: 1, counter: 'hatchedEggs', badgeName: '첫 부화 배지', badgeImage: badge('7-1 알에서 깨어난 친구.png') },
+  { id: 'achievement-7-2', title: '새로운 가족', desc: '알 5개 부화시키기', event: 'egg_hatched', goal: 5, counter: 'hatchedEggs', badgeName: '부화 도우미 배지', badgeImage: badge('7-2 새로운 가족.png') },
+  { id: 'achievement-7-3', title: '부화 전문가', desc: '알 10개 부화시키기', event: 'egg_hatched', goal: 10, counter: 'hatchedEggs', badgeName: '부화 전문가 배지', badgeImage: badge('7-3 부화 전문가.png') },
+  { id: 'achievement-8-1', title: '자연목장', desc: '목장에 인테리어 5개 배치하기', event: 'interior_place', goal: 5, counter: 'interiorPlacements', badgeName: '작은 목장 배지', badgeImage: badge('8-1 자연목장.png') },
+  { id: 'achievement-8-2', title: '활기찬 목장', desc: '목장에 인테리어 15개 배치하기', event: 'interior_place', goal: 15, counter: 'interiorPlacements', badgeName: '활기찬 목장 배지', badgeImage: badge('8-2 활기찬 목장.png') },
+  { id: 'achievement-8-3', title: '완성된 목장', desc: '목장에 인테리어 30개 배치하기', event: 'interior_place', goal: 30, counter: 'interiorPlacements', badgeName: '최고의 목장 배지', badgeImage: badge('8-3 완성된 목장.png') },
+  { id: 'achievement-9-1', title: '꾸준한 생물학자', desc: '일일 미션 10개 완료하기', event: 'daily_mission_completed', goal: 10, counter: 'dailyMissionsCompleted', badgeName: '꾸준함 배지', badgeImage: badge('9-1 꾸준한 생물학자.png') },
+  { id: 'achievement-9-2', title: '성실함의 증명', desc: '일일 미션 50개 완료하기', event: 'daily_mission_completed', goal: 50, counter: 'dailyMissionsCompleted', badgeName: '성실한 연구자 배지', badgeImage: badge('9-2 성실함의 증명.png') },
+  { id: 'achievement-9-3', title: '매일매일 탐구생활', desc: '일일 미션 100개 완료하기', event: 'daily_mission_completed', goal: 100, counter: 'dailyMissionsCompleted', badgeName: '탐구생활 마스터 배지', badgeImage: badge('9-3 매일매일 탐구생활.png') },
+  { id: 'achievement-10-1', title: '첫 번째 친구', desc: '친구 1명 추가하기', event: 'friend_add', goal: 1, counter: 'friendsAdded', badgeName: '첫 우정 배지', badgeImage: badge('10-1 첫 번째 친구.png') },
+  { id: 'achievement-10-2', title: '함께하는 탐험', desc: '친구 목장 10회 방문하기', event: 'friend_visit', goal: 10, counter: 'friendVisits', badgeName: '이웃 곤충학자 배지', badgeImage: badge('10-2 함께하는 탐험.png') },
+  { id: 'achievement-10-3', title: '인기 곤충학자', desc: '친구 10명 추가하기', event: 'friend_add', goal: 10, counter: 'friendsAdded', badgeName: '우정의 달인 배지', badgeImage: badge('인기 곤충학자.png') },
+]
+
+export const INITIAL_ACHIEVEMENT_COUNTERS = {
+  ranchDiscoveries: 0, drawings: [], explorations: 0, photos: [], hatchedEggs: 0,
+  eggGrowthActivities: 0, interiorPlacements: 0, dailyMissionsCompleted: 0, friendsAdded: 0, friendVisits: 0,
+  registeredSpecies: [], allRanksSpecies: [], rankState: {},
+}
