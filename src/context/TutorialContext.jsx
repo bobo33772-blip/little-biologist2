@@ -133,8 +133,8 @@ export function TutorialProvider({ children }) {
   useEffect(() => {
     if (location.pathname !== '/ranch' || location.state?.editPlacementId) return
     if (location.state?.firstLogin && !eggGrantReady) return
-    if (!hasCompletedTutorial(user?.uid) || location.state?.firstLogin) {
-      const savedIndex = location.state?.firstLogin ? 0 : readTutorialProgress(user?.uid)
+    if (location.state?.firstLogin && !hasCompletedTutorial(user?.uid)) {
+      const savedIndex = 0
       saveTutorialProgress(user?.uid, savedIndex)
       setStepIndex((current) => current ?? savedIndex)
     }
@@ -202,7 +202,7 @@ export function TutorialProvider({ children }) {
     },
     openIfNeeded() {
       if (location.state?.firstLogin && !eggGrantReady) return
-      if (!hasCompletedTutorial(user?.uid)) setStepIndex((current) => current ?? readTutorialProgress(user?.uid))
+      if (location.state?.firstLogin && !hasCompletedTutorial(user?.uid)) setStepIndex((current) => current ?? readTutorialProgress(user?.uid))
     },
     targetHabitatId,
     targetSpeciesId,
@@ -216,6 +216,7 @@ export function TutorialProvider({ children }) {
       markTutorialCompleted(user?.uid)
       setIsHelpRestart(false)
       setStepIndex(null)
+      navigate('/ranch', { replace: true })
     },
     // 탐험도우미 버튼 — 완료 여부와 무관하게 튜토리얼을 처음부터 다시 보여주되, 최초 1회용
     // 액션 단계(SKIP_ON_HELP_RESTART)는 건너뛴다.
