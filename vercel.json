@@ -2,5 +2,15 @@
   "framework": "vite",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://little-biologist2.onrender.com/api/:path*"
+    },
+    {
+      "source": "/chat",
+      "destination": "https://little-biologist2.onrender.com/chat"
+    }
+  ]
 }
