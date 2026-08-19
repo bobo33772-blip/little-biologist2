@@ -55,6 +55,7 @@ app.use(cors())
 
 const PORT = process.env.PORT || 5174
 const INAT_TOKEN = process.env.INATURALIST_JWT
+const INAT_AUTH_HEADER = INAT_TOKEN?.startsWith('Bearer ') ? INAT_TOKEN : `Bearer ${INAT_TOKEN}`
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
@@ -137,7 +138,7 @@ app.post('/api/classify-insect', upload.single('image'), async (req, res) => {
 
     const inatResponse = await fetch('https://api.inaturalist.org/v1/computervision/score_image', {
       method: 'POST',
-      headers: { Authorization: INAT_TOKEN },
+      headers: { Authorization: INAT_AUTH_HEADER },
       body: form,
     })
 
