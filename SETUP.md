@@ -42,7 +42,8 @@ cp .env.example .env
 | 변수 | 용도 | 없으면 |
 |---|---|---|
 | `DATABASE_URL` | 계정/친구/진행도 저장용 Supabase(Postgres) 연결 문자열 (Session pooler 권장) | 서버는 뜨지만 로그인 등 DB 기능이 503 |
-| `INATURALIST_JWT` | 탐험 사진 분석(iNaturalist Computer Vision API) | 사진 등록 시 서버 에러 |
+| `INAT_OAUTH_ACCESS_TOKEN` | 탐험 사진 분석(iNaturalist) — 서버가 JWT를 자동 갱신 (6번 참고) | `INATURALIST_JWT`를 사용 |
+| `INATURALIST_JWT` | 탐험 사진 분석(iNaturalist) — 매일 손으로 갱신하는 예전 방식. 위 값이 있으면 무시 | 둘 다 없으면 사진 등록 시 서버 에러 |
 | `PORT` | 프록시 서버 포트 (기본 5174) | 기본값 사용 |
 | `VITE_GOOGLE_MAPS_API_KEY` | 탐험 화면 동네 생태 지도 | 지도가 로드되지 않음 |
 | `OPENAI_API_KEY` | AI 말벗 챗봇(`/chat`) | 챗봇이 서버 응답 대신 로컬 대체 답변만 사용 |
@@ -79,3 +80,47 @@ vite(프론트, 5173)와 프록시 서버(API, 5174)가 동시에 뜹니다. 두
 - **로그인이 안 될 때**: Render > Logs에서 `[db] schema init failed`를 찾아 뒤에 붙은 에러를 보세요.
   `Tenant or user not found`면 Supabase 일시정지/잘못된 프로젝트, `28P01`/`password authentication failed`면
   `DATABASE_URL`의 비밀번호가 바뀐 것이에요.
+
+## 5. Supabase 프로젝트 연결/교체
+
+1. Supabase 대시보드에서 프로젝트를 열고 상단 **Connect** → **Session pooler** 탭의 연결 문자열을 복사해요.
+   (`postgresql://postgres.<프로젝트ref>:[YOUR-PASSWORD]@aws-?-<리전>.pooler.supabase.com:5432/postgres`)
+   - Render는 IPv4만 되므로 **Direct connection(db.<ref>.supabase.co)은 쓰면 안 돼요.**
+   - `[YOUR-PASSWORD]`는 프로젝트를 만들 때 정한 DB 비밀번호예요(대괄호도 지워요). 모르면 Project Settings >
+     Database에서 재설정해요. 비밀번호에 `# / ? % @`가 있으면 URL 인코딩해야 하니, 영문+숫자로만 만드는 게 편해요.
+   - `?sslmode=...`는 붙이지 마세요. 암호화(TLS)는 서버가 Supabase 인증서(`server/supabase-ca.crt`)로 직접 켜요.
+2. **예전 프로젝트의 계정/진행도를 옮기려면 이 단계 전에** 해야 해요(새 DB가 완전히 비어 있을 때).
+   예전 프로젝트를 Restore한 뒤 `pg_dump --schema=public --no-owner --no-privileges "<예전 URL>" | psql "<새 URL>"`.
+   옮기지 않으면 새 프로젝트는 빈 DB라서 모두 새로 가입해야 해요.
+3. Render > 서비스 > Environment의 `DATABASE_URL`을 이 값으로 바꾸고 저장해요(로컬은 `.env`).
+4. 서버가 다시 뜨면 테이블, 기준 데이터(서식지 5 / 종 79 / 미션 82), 보안 설정(RLS)을 **자동으로** 만들어요.
+   Render Logs에 `[seed] 빈 DB — ...`와 `[db] schema ready`가 찍히면 끝이에요. 따로 SQL을 실행할 필요 없어요.
+   - 기준 데이터는 테이블이 완전히 비어 있을 때만 자동으로 채워요. 나중에 `src/data`의 미션/종을 고치면
+     `node scripts/seed-supabase.js`로 직접 반영해요(서버 로그에 `[seed] 기준 데이터가 데이터 파일보다 적음`이 보이면 이걸 실행).
+
+## 6. iNaturalist 토큰 자동 갱신
+
+사진 분석에 쓰는 iNaturalist JWT는 24시간마다 만료돼요. OAuth 앱의 액세스 토큰(만료 없음)을 한 번 넣어두면
+서버가 만료 1시간 전에 새 JWT를 알아서 받아와서, 매일 복사할 필요가 없어져요.
+
+1. **앱 소유자 신청** — https://www.inaturalist.org/oauth/app_owner_application
+   - 조건: 가입 2개월 이상 + 최근 한 달 동안 다른 사람 관찰에 "improving" 동정 10개 이상.
+   - iNaturalist 직원이 직접 검토해서 승인까지 시간이 걸리고, 거절될 수도 있어요. 어린이 교육용 곤충 판별 앱이고
+     서버에서 computervision/score_image를 부른다는 점, 하루 예상 호출 수를 솔직하게 적으세요.
+   - 컴퓨터 비전 API는 공개 API가 아니라서, 사용 허락을 help@inaturalist.org에 따로 문의해두는 게 안전해요.
+   - **승인 전까지는 지금처럼 `INATURALIST_JWT`를 매일 넣으면 그대로 동작해요.**
+2. **앱 등록** — 승인되면 https://www.inaturalist.org/oauth/applications/new 에서
+   Name `Little Biologist`, Redirect URI `https://little-biologist2.onrender.com/`, Confidential 체크 →
+   Application ID와 Secret을 복사해요.
+3. **액세스 토큰 받기 (내 PC에서 한 번만)**
+   ```
+   $env:INAT_APP_ID='앱ID'; $env:INAT_APP_SECRET='시크릿'; $env:INAT_USERNAME='아이디'; $env:INAT_PASSWORD='비밀번호'
+   node scripts/inat-get-token.mjs
+   Remove-Item Env:INAT_PASSWORD, Env:INAT_APP_SECRET
+   ```
+   구글/애플 로그인으로만 가입한 계정은 iNaturalist 설정에서 비밀번호를 먼저 만들어야 해요.
+4. 출력된 값을 Render > Environment의 `INAT_OAUTH_ACCESS_TOKEN`에 넣고, 이제 필요 없는 `INATURALIST_JWT`는
+   지우고 저장해요(비밀번호/시크릿은 넣지 마세요). 서버가 다시 뜨면 바로 JWT를 한 번 받아와요.
+   `https://little-biologist2.onrender.com/api/health`에서 `inat`이 `"mode":"oauth"`, `"lastRefreshOk":true`이고
+   `expiresAt`이 약 24시간 뒤면 성공이에요. `lastRefreshOk`가 `false`면 Render Logs의 `[inat-auth] JWT 갱신 실패`를 보세요.
+5. 토큰이 유출되면 https://www.inaturalist.org/oauth/authorized_applications 에서 취소하고 3번을 다시 해요.

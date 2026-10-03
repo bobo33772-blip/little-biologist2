@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import pg from 'pg'
 
 const { Pool } = pg
@@ -7,12 +8,28 @@ const { Pool } = pg
 if (!process.env.DATABASE_URL) {
   console.error('[db] DATABASE_URL이 비어 있음 — .env 또는 Render > Environment를 확인하세요')
 }
+
+// Supabase로 가는 연결은 TLS로 암호화하고, Supabase 공개 루트 인증서(supabase-ca.crt, 2031년 만료)로
+// 상대 서버를 검증한다. 이 인증서는 Node 기본 인증서 목록에 없어서, URL에 ?sslmode=require를 붙이면
+// 오히려 "self-signed certificate in certificate chain"으로 실패한다 — 그래서 URL에는 아무것도 붙이지
+// 않고 여기서 켠다. 로컬 Postgres처럼 Supabase가 아닌 주소는 건드리지 않는다.
+function sslOptionFor(connectionString) {
+  let host
+  try {
+    host = new URL(connectionString).hostname
+  } catch {
+    return undefined
+  }
+  if (!/\.supabase\.(com|co)$/.test(host)) return undefined
+  return { ca: fs.readFileSync(new URL('./supabase-ca.crt', import.meta.url), 'utf8') }
+}
 // 타임아웃이 없으면 DB가 응답하지 않을 때(Supabase 프로젝트 일시정지 등) 서버 부팅과 요청이
 // 끝없이 매달린다. 연결/쿼리에 상한을 둬서 실패를 빨리 드러내고 503으로 응답할 수 있게 한다.
 // query_timeout은 사진(base64)이 많은 계정의 진행도 조회도 견디도록 넉넉하게 두되, Vercel
 // 프록시 한도(120초)보다는 짧게 잡는다.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: sslOptionFor(process.env.DATABASE_URL),
   connectionTimeoutMillis: 15000,
   query_timeout: 60000,
   keepAlive: true,
@@ -242,6 +259,26 @@ export async function initSchema() {
       price_leaf    INTEGER NOT NULL,
       purchased_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    -- Supabase는 public 스키마의 테이블을 REST API(Data API)로 그대로 노출한다 — RLS가 꺼져 있으면
+    -- anon 키만 있으면 누구나 users(비밀번호 해시 포함)를 읽고 쓸 수 있다. 이 앱은 Data API를 안 쓰고
+    -- 서버가 테이블 소유자(postgres)로 직접 접속하므로(소유자는 RLS를 안 받음), 정책 없이 RLS만 켜서
+    -- Data API 쪽 접근을 전부 막는다. 이미 켜진 테이블은 건드리지 않는다.
+    DO $$
+    DECLARE t text;
+    BEGIN
+      FOR t IN
+        SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND NOT rowsecurity AND tablename = ANY (ARRAY[
+          'users', 'habitat', 'species', 'representative_character', 'user_habitat_layout',
+          'user_species_record', 'mission_definition', 'user_mission_pool', 'user_mission_progress',
+          'user_progress_counter', 'friend_request', 'friendship', 'guestbook', 'user_state',
+          'shop_item', 'bag_item', 'ranch_placement', 'gacha_pull', 'purchase_history'
+        ])
+      LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+      END LOOP;
+    END $$;
   `)
 }
 
@@ -280,10 +317,31 @@ async function usersTableExists() {
   return rows[0]?.ok === true
 }
 
-export async function initSchemaWithRetry() {
+// DB에 연결할 수 없을 때 pg/네트워크가 내는 에러들 — 서버 버그가 아니라 "잠시 후 다시" 상황이다.
+const DB_UNAVAILABLE_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'EAI_AGAIN',
+  '08000', '08001', '08003', '08004', '08006', '25006', '28P01', '53300', '57P01', '57P03', 'XX000',
+])
+
+export function isDbUnavailableError(err) {
+  return DB_UNAVAILABLE_CODES.has(err?.code) || /timeout|Connection terminated|not queryable|tenant or user not found|max client/i.test(err?.message || '')
+}
+
+// afterInit: 스키마가 준비된 직후, DB 라우트를 열기 전에 실행할 작업(기준 데이터 시드 등).
+export async function initSchemaWithRetry(afterInit) {
   for (let attempt = 1; ; attempt += 1) {
     try {
       await initSchema()
+      if (afterInit) {
+        try {
+          await afterInit()
+        } catch (err) {
+          // 연결 문제면 처음부터 다시 시도한다. 그 밖의 실패(데이터 파일의 잘못된 값 등)는 재시도해도
+          // 똑같이 실패하므로, 크게 로그만 남기고 DB 라우트는 연다 — 기준 데이터 때문에 로그인까지 막히면 안 된다.
+          if (isDbUnavailableError(err)) throw err
+          console.error('[seed] 기준 데이터 채우기 실패 — src/data 파일을 확인하세요:', err.code || '', err.message)
+        }
+      }
       setDbReady()
       console.log('[db] schema ready')
       return

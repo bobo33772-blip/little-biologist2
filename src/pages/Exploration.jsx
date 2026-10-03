@@ -38,6 +38,8 @@ const PREDICTION_RETRY_DEADLINE_MS = 3 * 60 * 1000
 const PREDICTION_RETRY_INTERVAL_MS = 3000
 
 async function requestPrediction(endpoint, formData) {
+  // 재시도는 CLIP 모델 준비를 기다리는 그림 판별에만 쓴다 — 사진 분석(iNaturalist)은 한 번만 보낸다.
+  if (endpoint !== '/api/predict-drawing') return fetch(endpoint, { method: 'POST', body: formData })
   const deadline = Date.now() + PREDICTION_RETRY_DEADLINE_MS
   for (;;) {
     try {
@@ -217,6 +219,8 @@ export default function Exploration() {
             setHint('AI가 아직 그림을 볼 준비를 하고 있어요. 1~2분 뒤에 다시 해볼까요?')
           } else if (body?.error === 'CLIP_DISABLED') {
             setHint('지금은 그림 판별 기능을 쓸 수 없어요.')
+          } else if (body?.error === 'INAT_AUTH_UNAVAILABLE' || body?.error === 'MISSING_TOKEN' || response.status === 401) {
+            setHint('사진 분석 서버 연결에 문제가 있어요. 잠시 후 다시 시도해주세요.')
           } else if (response.status === 404) {
             setHint('이전 버전 서버에 연결되어 있어요. 실행 중인 서버를 모두 종료하고 npm run dev를 다시 실행해주세요.')
           } else {

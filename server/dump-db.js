@@ -1,6 +1,7 @@
 // data.db.txt로 스키마+모든 행을 사람이 읽을 수 있는 형태로 덤프한다 — DB 내용이 바뀔 때마다
 // `node server/dump-db.js`로 다시 생성하면 된다.
 // password_hash는 비밀번호 원문은 아니지만 그대로 노출할 이유가 없어 이 덤프에서는 가린다.
+import 'dotenv/config'
 import fs from 'node:fs'
 import { pool } from './db.js'
 

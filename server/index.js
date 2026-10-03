@@ -7,7 +7,9 @@ import OpenAI from 'openai'
 import sharp from 'sharp'
 import { INSECT_SPECIES, HABITATS, getInsectSpecies, getHabitatStats, DEMO_ACCOUNT_USERNAME } from '../src/data/insectSpecies.js'
 import { getClipPredictor, isClipPredictorReady, predictDrawing, SPECIES as CLIP_SPECIES } from './clipPredictor.js'
-import { pool, initSchemaWithRetry, isDbReady, waitForDbReady, generateUid, hashPassword, verifyPassword } from './db.js'
+import { pool, initSchemaWithRetry, isDbReady, isDbUnavailableError, waitForDbReady, generateUid, hashPassword, verifyPassword } from './db.js'
+import { seedReferenceDataIfNeeded } from './seed.js'
+import { INAT_USER_AGENT, canAutoRefreshInatJwt, getInatAuthStatus, getInatJwt, hasInatAuthConfig } from './inatAuth.js'
 import { createRepresentativeCharacter } from '../src/data/representativeCharacter.js'
 
 // predict_insect.py를 서버 사이드로 옮긴 것. iNaturalist 개인 토큰을 프론트엔드 번들에
@@ -54,8 +56,6 @@ const app = express()
 app.use(cors())
 
 const PORT = process.env.PORT || 5174
-const INAT_TOKEN = process.env.INATURALIST_JWT
-const INAT_AUTH_HEADER = INAT_TOKEN?.startsWith('Bearer ') ? INAT_TOKEN : `Bearer ${INAT_TOKEN}`
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
@@ -75,13 +75,14 @@ app.get('/healthz', (req, res) => {
 
 // 실제 DB까지 왕복하는 상태 확인. 로그인 화면이 열릴 때 서버를 미리 깨우는 용도와, 외부 크론으로
 // 주기적으로 호출해서 Supabase 무료 프로젝트가 미사용으로 일시정지되지 않게 하는 용도로 쓴다.
+// inat: iNaturalist JWT 설정 방식(oauth/password/static/none)과 현재 JWT 만료 시각 — 토큰 값은 안 내보낸다.
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1')
-    res.json({ ok: true, db: isDbReady() ? 'up' : 'starting' })
+    res.json({ ok: true, db: isDbReady() ? 'up' : 'starting', inat: getInatAuthStatus() })
   } catch (err) {
     console.error('[health] db ping failed:', err.code || '', err.message)
-    res.status(503).json({ ok: false, db: 'down' })
+    res.status(503).json({ ok: false, db: 'down', inat: getInatAuthStatus() })
   }
 })
 
@@ -176,20 +177,42 @@ app.post('/api/classify-insect', upload.single('image'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'NO_IMAGE' })
   }
-  if (!INAT_TOKEN) {
+  if (!hasInatAuthConfig) {
     return res.status(500).json({ error: 'MISSING_TOKEN' })
   }
 
   try {
-    const form = new FormData()
-    form.append('image', new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname)
-    form.append('locale', 'ko')
+    // FormData 본문은 한 번 보내면 다시 못 쓰므로, 401로 재시도할 때를 위해 매번 새로 만든다.
+    const callScoreImage = (jwt) => {
+      const form = new FormData()
+      form.append('image', new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname)
+      form.append('locale', 'ko')
+      return fetch('https://api.inaturalist.org/v1/computervision/score_image', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${jwt}`, 'User-Agent': INAT_USER_AGENT },
+        body: form,
+      })
+    }
 
-    const inatResponse = await fetch('https://api.inaturalist.org/v1/computervision/score_image', {
-      method: 'POST',
-      headers: { Authorization: INAT_AUTH_HEADER },
-      body: form,
-    })
+    // JWT를 못 받으면 502로 답한다 — 503은 Exploration.jsx가 "준비 중"으로 보고 계속 재시도하는 코드다.
+    let jwt
+    try {
+      jwt = await getInatJwt()
+    } catch {
+      return res.status(502).json({ error: 'INAT_AUTH_UNAVAILABLE' })
+    }
+    let inatResponse = await callScoreImage(jwt)
+    // 만료/취소된 JWT는 401로 돌아온다 — 자동 갱신이 설정돼 있으면 새 JWT로 딱 한 번만 다시 시도한다.
+    // (갱신이 막 실패해 같은 JWT가 돌아오면 다시 보내봤자 또 401이므로 사진을 재전송하지 않는다.)
+    if (inatResponse.status === 401 && canAutoRefreshInatJwt) {
+      let freshJwt
+      try {
+        freshJwt = await getInatJwt({ force: true })
+      } catch {
+        return res.status(502).json({ error: 'INAT_AUTH_UNAVAILABLE' })
+      }
+      if (freshJwt !== jwt) inatResponse = await callScoreImage(freshJwt)
+    }
 
     if (!inatResponse.ok) {
       return res.status(inatResponse.status).json({ error: 'INATURALIST_API_ERROR', status: inatResponse.status })
@@ -1037,20 +1060,10 @@ app.get('/api/field-guide/:uid', ah(async (req, res) => {
   res.json({ nickname: target.nickname, species })
 }))
 
-// DB에 연결할 수 없을 때 pg/네트워크가 내는 에러들 — 이런 건 서버 버그가 아니라 "잠시 후 다시"
-// 상황이므로 500 대신 503으로 답해서 프론트가 비밀번호 오류와 구분해 안내할 수 있게 한다.
-const DB_UNAVAILABLE_CODES = new Set([
-  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'EAI_AGAIN',
-  '08000', '08001', '08003', '08004', '08006', '25006', '28P01', '53300', '57P01', '57P03', 'XX000',
-])
-
-function isDbUnavailableError(err) {
-  return DB_UNAVAILABLE_CODES.has(err?.code) || /timeout|Connection terminated|not queryable|tenant or user not found|max client/i.test(err?.message || '')
-}
-
 // 라우트 핸들러 밖에서 난 에러(multer 파일 크기 초과, JSON 본문 파싱 실패 등)와 ah()로 넘어온 DB
 // 에러를 여기서 한 번에 JSON으로 답한다. 이게 없으면 Express 기본 500 HTML이 나가거나, 아예 응답이
-// 안 가서 프론트에서 원인을 알 수 없었다.
+// 안 가서 프론트에서 원인을 알 수 없었다. DB 연결 문제는 500 대신 503으로 답해서 프론트가 비밀번호
+// 오류와 구분해 안내할 수 있게 한다.
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err)
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
@@ -1081,8 +1094,12 @@ process.on('unhandledRejection', (err) => {
 // DB 준비 여부와 상관없이 포트부터 연다. 예전처럼 DB가 준비된 뒤에만 listen하면, DB에 못 붙는
 // 동안 Render가 서버를 영영 "깨우는 중"으로 붙잡고 있어서 로그인 요청이 2분 뒤 502로 끝났다.
 // 스키마 준비는 listen과 동시에 시작하고, DB 라우트는 위의 DB_ROUTES 미들웨어가 준비를 기다린다.
-initSchemaWithRetry()
+// 새로 만든 Supabase 프로젝트처럼 기준 데이터(서식지/종/미션)가 비어 있으면 이때 자동으로 채운다.
+initSchemaWithRetry(seedReferenceDataIfNeeded)
 app.listen(PORT, () => {
   console.log(`Insect classify proxy listening on http://localhost:${PORT}`)
   if (CLIP_ENABLED && process.env.CLIP_PRELOAD === 'true') startClipLoading()
+  // 자동 갱신이 설정돼 있으면 시작하자마자 JWT를 한 번 받아둔다 — 첫 사진 분석이 빨라지고, 액세스 토큰이
+  // 잘못 들어갔으면 /api/health의 inat.lastRefreshOk가 바로 false로 보인다.
+  if (canAutoRefreshInatJwt) getInatJwt().catch(() => {})
 })
