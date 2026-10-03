@@ -1,14 +1,19 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AuthScreen } from './authVisuals'
 import LoadingOverlay from '../../components/common/LoadingOverlay'
+import { wakeServer } from '../../api/auth'
 
 // /login, /signup가 이 레이아웃 아래에서 전환된다. AuthScreen(배경+로고+카드
 // 틀)은 여기서 한 번만 마운트되어 라우트가 바뀌어도 리마운트되지 않으므로
 // 제목/로고는 그대로 있고, 카드 안 내용(Outlet)만 부드럽게 크로스페이드된다.
 export default function AuthRouteLayout() {
   const location = useLocation()
+
+  useEffect(() => {
+    wakeServer()
+  }, [])
 
   return (
     <AuthScreen>

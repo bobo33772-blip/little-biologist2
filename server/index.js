@@ -6,8 +6,8 @@ import multer from 'multer'
 import OpenAI from 'openai'
 import sharp from 'sharp'
 import { INSECT_SPECIES, HABITATS, getInsectSpecies, getHabitatStats, DEMO_ACCOUNT_USERNAME } from '../src/data/insectSpecies.js'
-import { getClipPredictor, predictDrawing, SPECIES as CLIP_SPECIES } from './clipPredictor.js'
-import { pool, dbReady, generateUid, hashPassword, verifyPassword } from './db.js'
+import { getClipPredictor, isClipPredictorReady, predictDrawing, SPECIES as CLIP_SPECIES } from './clipPredictor.js'
+import { pool, initSchemaWithRetry, isDbReady, waitForDbReady, generateUid, hashPassword, verifyPassword } from './db.js'
 import { createRepresentativeCharacter } from '../src/data/representativeCharacter.js'
 
 // predict_insect.py를 서버 사이드로 옮긴 것. iNaturalist 개인 토큰을 프론트엔드 번들에
@@ -63,6 +63,38 @@ const openai = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null
 // 선택한 도감 이미지를 GPT에 함께 전달할 수 있도록 요청 본문 크기를 넉넉하게 허용한다.
 app.use(express.json({ limit: '10mb' }))
 
+// Express 4는 async 핸들러에서 난 에러(예: DB 쿼리 실패)를 에러 미들웨어로 넘겨주지 않는다 —
+// 그대로 두면 요청이 응답 없이 영원히 매달려서 로그인 버튼이 계속 "로그인 중..."에 멈춘다.
+// DB를 쓰는 라우트는 전부 이걸로 감싸서, 실패하면 아래 에러 미들웨어가 503/500 JSON으로 답하게 한다.
+const ah = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
+
+// Render 헬스 체크용 — DB와 무관하게 서버 프로세스가 떠 있으면 항상 200.
+app.get('/healthz', (req, res) => {
+  res.json({ ok: true, db: isDbReady() ? 'ready' : 'starting' })
+})
+
+// 실제 DB까지 왕복하는 상태 확인. 로그인 화면이 열릴 때 서버를 미리 깨우는 용도와, 외부 크론으로
+// 주기적으로 호출해서 Supabase 무료 프로젝트가 미사용으로 일시정지되지 않게 하는 용도로 쓴다.
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1')
+    res.json({ ok: true, db: isDbReady() ? 'up' : 'starting' })
+  } catch (err) {
+    console.error('[health] db ping failed:', err.code || '', err.message)
+    res.status(503).json({ ok: false, db: 'down' })
+  }
+})
+
+// 스키마 준비(initSchemaWithRetry)가 끝나기 전에 들어온 DB 라우트 요청은 최대 20초까지 준비를
+// 기다렸다가 처리하고, 그래도 안 되면(DB 일시정지 등) 503으로 답해서 프론트가 "서버 문제"로 안내하게 한다.
+// /chat, /api/predict-drawing, /api/classify-insect는 DB를 안 쓰므로 일부러 제외한다.
+const DB_ROUTES = ['/api/signup', '/api/login', '/api/state', '/api/users', '/api/friends', '/api/guestbook', '/api/ranch', '/api/field-guide']
+const DB_READY_WAIT_MS = 20000
+app.use(DB_ROUTES, ah(async (req, res, next) => {
+  if (isDbReady() || (await waitForDbReady(DB_READY_WAIT_MS))) return next()
+  res.status(503).json({ error: 'DB_UNAVAILABLE' })
+}))
+
 const MIN_DRAWING_INK_PIXELS = 10
 const MIN_DRAWING_BOUNDS = 2
 
@@ -104,22 +136,39 @@ async function analyzeDrawingBuffer(buffer) {
   return { hasInk: hasMeaningfulInk, inkPixels, boundsWidth, boundsHeight }
 }
 
-// CLIP과 79종 후보 텍스트 임베딩을 서버 시작 시 한 번만 불러와 캐시한다. 모델을 처음 내려받는
-// 동안에도 서버 자체는 떠 있고, 그 사이 들어온 예측 요청은 같은 싱글턴 프라미스를 기다린다.
-getClipPredictor().then(() => console.log(`[clip] ready: ${CLIP_SPECIES.length} candidates cached`)).catch((error) => console.error('[clip] startup failed:', error.message))
+// CLIP 모델은 서버 시작 시 미리 불러오지 않고, 첫 그림 판별 요청이 올 때 백그라운드로 불러온다.
+// Render 무료 인스턴스(512MB)에서 부팅하자마자 모델을 올리면 메모리 초과로 프로세스가 죽고, 그때마다
+// 로그인 같은 다른 요청까지 같이 끊긴다. 메모리가 넉넉한 환경에서는 CLIP_PRELOAD=true로 미리 불러올
+// 수 있고, 아예 끄려면 CLIP_ENABLED=false로 둔다.
+const CLIP_ENABLED = process.env.CLIP_ENABLED !== 'false'
+const CLIP_UNAVAILABLE_BODY = { success: false, error: 'CLIP_UNAVAILABLE', message: 'CLIP 모델을 불러오는 중입니다. 잠시 후 다시 시도해주세요.' }
+
+function startClipLoading() {
+  getClipPredictor()
+    .then(() => console.log(`[clip] ready: ${CLIP_SPECIES.length} candidates cached`))
+    .catch((error) => console.error('[clip] load failed:', error.message))
+}
 
 app.post('/api/predict-drawing', upload.single('file'), async (req, res) => {
+  // 503은 Exploration.jsx가 "모델 준비 중"으로 보고 계속 재시도하므로, 꺼둔 경우는 501로 구분한다.
+  if (!CLIP_ENABLED) return res.status(501).json({ success: false, error: 'CLIP_DISABLED' })
   if (!req.file?.buffer?.length) return res.status(400).json({ success: false, error: 'EMPTY_FILE' })
   try {
     const drawingStats = await analyzeDrawingBuffer(req.file.buffer)
     if (!drawingStats.hasInk) {
       return res.status(400).json({ success: false, error: 'EMPTY_DRAWING' })
     }
+    // 모델을 다 불러올 때까지 요청을 붙잡고 있으면 Vercel 프록시 한도(120초)를 넘길 수 있다 — 로딩만
+    // 시작해두고 바로 503을 돌려주면, 프론트가 준비될 때까지 조용히 재시도한다.
+    if (!isClipPredictorReady()) {
+      startClipLoading()
+      return res.status(503).json(CLIP_UNAVAILABLE_BODY)
+    }
     const predictions = await predictDrawing(req.file.buffer, req.body?.hint_text || '')
     return res.json({ success: true, engine_version: 'node-clip-v2-hard-filter', predictions })
   } catch (error) {
     console.error('[predict-drawing] failed:', error)
-    return res.status(503).json({ success: false, error: 'CLIP_UNAVAILABLE', message: 'CLIP 모델을 불러오는 중입니다. 잠시 후 다시 시도해주세요.' })
+    return res.status(503).json(CLIP_UNAVAILABLE_BODY)
   }
 })
 
@@ -637,7 +686,7 @@ async function setEquipped(userId, type, codes) {
   }
 }
 
-app.post('/api/signup', async (req, res) => {
+app.post('/api/signup', ah(async (req, res) => {
   const { username, password, nickname } = req.body || {}
   if (!username || !password || !nickname) {
     return res.status(400).json({ error: 'MISSING_FIELDS' })
@@ -661,9 +710,9 @@ app.post('/api/signup', async (req, res) => {
     [userId]
   )
   res.status(201).json({ user: userRows[0] })
-})
+}))
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', ah(async (req, res) => {
   const { username, password } = req.body || {}
   if (!username || !password) {
     return res.status(400).json({ error: 'MISSING_FIELDS' })
@@ -678,25 +727,32 @@ app.post('/api/login', async (req, res) => {
   }
   const today = todayDateKey()
   let totalLoginDays = row.total_login_days
-  if (row.last_login_date !== today) {
-    totalLoginDays += 1
-    await pool.query('UPDATE users SET total_login_days = $1, last_login_date = $2 WHERE id = $3', [totalLoginDays, today, row.id])
-  }
-  // 이 기능이 생기기 전에 가입한 계정은 대표 캐릭터가 없으니 로그인 시점에 하나 배정해 채운다.
-  if (!(await hasRepresentativeCharacter(row.id))) {
-    await upsertRepresentativeCharacter(row.id, createRepresentativeCharacter())
+  try {
+    if (row.last_login_date !== today) {
+      await pool.query('UPDATE users SET total_login_days = $1, last_login_date = $2 WHERE id = $3', [totalLoginDays + 1, today, row.id])
+      totalLoginDays += 1
+    }
+    // 이 기능이 생기기 전에 가입한 계정은 대표 캐릭터가 없으니 로그인 시점에 하나 배정해 채운다.
+    if (!(await hasRepresentativeCharacter(row.id))) {
+      await upsertRepresentativeCharacter(row.id, createRepresentativeCharacter())
+    }
+  } catch (err) {
+    // DB 용량 초과로 읽기 전용(25006)이 되면 출석 일수 같은 부가 쓰기만 실패한다 — 그것 때문에
+    // 로그인 자체가 막히지 않게 건너뛴다.
+    if (err.code !== '25006') throw err
+    console.error('[login] DB가 읽기 전용이라 출석/대표 캐릭터 갱신을 건너뜀')
   }
   res.json({ user: { id: row.id, uid: row.uid, username: row.username, nickname: row.nickname, totalLoginDays } })
-})
+}))
 
-app.get('/api/state/:uid', async (req, res) => {
+app.get('/api/state/:uid', ah(async (req, res) => {
   const user = await getUserByUid(req.params.uid)
   if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   const state = await buildStateForUser(user)
   res.json({ state })
-})
+}))
 
-app.put('/api/state/:uid/:key', async (req, res) => {
+app.put('/api/state/:uid/:key', ah(async (req, res) => {
   const user = await getUserByUid(req.params.uid)
   if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   const { key } = req.params
@@ -806,99 +862,16 @@ app.put('/api/state/:uid/:key', async (req, res) => {
   }
 
   res.json({ success: true })
-})
-
-app.post('/api/signup', async (req, res) => {
-  const { username, password, nickname } = req.body || {}
-  if (!username || !password || !nickname) {
-    return res.status(400).json({ error: 'MISSING_FIELDS' })
-  }
-  const { rows: existing } = await pool.query('SELECT 1 FROM users WHERE username = $1', [username])
-  if (existing.length) {
-    return res.status(409).json({ error: 'USERNAME_TAKEN' })
-  }
-  const uid = await issueUid()
-  const passwordHash = hashPassword(password)
-  const today = todayDateKey()
-  const { rows: inserted } = await pool.query(
-    'INSERT INTO users (uid, username, password_hash, nickname, total_login_days, last_login_date) VALUES ($1, $2, $3, $4, 1, $5) RETURNING id',
-    [uid, username, passwordHash, nickname, today]
-  )
-  const userId = inserted[0].id
-  // 대표 캐릭터(알)는 계정마다 6종 중 하나로 무작위 배정하고 첫 단계는 항상 "알"이다.
-  await upsertRepresentativeCharacter(userId, createRepresentativeCharacter())
-  const { rows: userRows } = await pool.query(
-    'SELECT id, uid, username, nickname, total_login_days AS "totalLoginDays" FROM users WHERE id = $1',
-    [userId]
-  )
-  res.status(201).json({ user: userRows[0] })
-})
-
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body || {}
-  if (!username || !password) {
-    return res.status(400).json({ error: 'MISSING_FIELDS' })
-  }
-  const { rows } = await pool.query(
-    'SELECT id, uid, username, nickname, password_hash, total_login_days, last_login_date FROM users WHERE username = $1',
-    [username]
-  )
-  const row = rows[0]
-  if (!row || !verifyPassword(password, row.password_hash)) {
-    return res.status(401).json({ error: 'INVALID_CREDENTIALS' })
-  }
-  const today = todayDateKey()
-  let totalLoginDays = row.total_login_days
-  if (row.last_login_date !== today) {
-    totalLoginDays += 1
-    await pool.query('UPDATE users SET total_login_days = $1, last_login_date = $2 WHERE id = $3', [totalLoginDays, today, row.id])
-  }
-  // 이 기능이 생기기 전에 가입한 계정은 대표 캐릭터가 없으니 로그인 시점에 하나 배정해 채운다.
-  const { rows: repCharRows } = await pool.query(
-    "SELECT 1 FROM user_state WHERE user_id = $1 AND key = 'representativeCharacter'",
-    [row.id]
-  )
-  if (!repCharRows.length) {
-    await upsertRepresentativeCharacter(row.id, createRepresentativeCharacter())
-  }
-  res.json({ user: { id: row.id, uid: row.uid, username: row.username, nickname: row.nickname, totalLoginDays } })
-})
-
-app.get('/api/state/:uid', async (req, res) => {
-  const user = await getUserByUid(req.params.uid)
-  if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
-  const { rows } = await pool.query('SELECT key, value FROM user_state WHERE user_id = $1', [user.id])
-  const state = {}
-  for (const row of rows) {
-    try {
-      state[row.key] = JSON.parse(row.value)
-    } catch {
-      state[row.key] = null
-    }
-  }
-  res.json({ state })
-})
-
-app.put('/api/state/:uid/:key', async (req, res) => {
-  const user = await getUserByUid(req.params.uid)
-  if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
-  const value = JSON.stringify(req.body?.value ?? null)
-  await pool.query(
-    `INSERT INTO user_state (user_id, key, value, updated_at) VALUES ($1, $2, $3, now())
-     ON CONFLICT (user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    [user.id, req.params.key, value]
-  )
-  res.json({ success: true })
-})
+}))
 
 // 친구 검색용 공개 조회. 아직 친구가 아니어도 uid로 상대를 찾아 미리보기(닉네임)만 보여준다.
-app.get('/api/users/:uid', async (req, res) => {
+app.get('/api/users/:uid', ah(async (req, res) => {
   const user = await getUserByUid(req.params.uid)
   if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   res.json({ user: { uid: user.uid, nickname: user.nickname } })
-})
+}))
 
-app.post('/api/friends/requests', async (req, res) => {
+app.post('/api/friends/requests', ah(async (req, res) => {
   const { requesterUid, targetUid } = req.body || {}
   const requester = await getUserByUid(requesterUid)
   const target = await getUserByUid(targetUid)
@@ -916,9 +889,9 @@ app.post('/api/friends/requests', async (req, res) => {
     throw err
   }
   res.status(201).json({ success: true })
-})
+}))
 
-app.get('/api/friends/requests', async (req, res) => {
+app.get('/api/friends/requests', ah(async (req, res) => {
   const user = await getUserByUid(req.query.uid)
   if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   const { rows: requests } = await pool.query(
@@ -930,13 +903,14 @@ app.get('/api/friends/requests', async (req, res) => {
     [user.id]
   )
   res.json({ requests })
-})
+}))
 
-app.post('/api/friends/requests/:id/accept', async (req, res) => {
+app.post('/api/friends/requests/:id/accept', ah(async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM friend_request WHERE id = $1 AND status = 'pending'", [req.params.id])
   const request = rows[0]
   if (!request) return res.status(404).json({ error: 'REQUEST_NOT_FOUND' })
   const client = await pool.connect()
+  let releaseError
   try {
     await client.query('BEGIN')
     await client.query("UPDATE friend_request SET status = 'accepted' WHERE id = $1", [request.id])
@@ -950,24 +924,27 @@ app.post('/api/friends/requests/:id/accept', async (req, res) => {
     ])
     await client.query('COMMIT')
   } catch (err) {
-    await client.query('ROLLBACK')
+    // 연결이 끊긴 상태면 ROLLBACK도 실패한다 — 원래 에러를 그대로 올리고, 트랜잭션 상태를 알 수 없는
+    // 연결은 풀에 돌려보내지 않고 버린다(release에 에러를 넘기면 pg-pool이 연결을 폐기한다).
+    releaseError = err
+    await client.query('ROLLBACK').catch(() => {})
     throw err
   } finally {
-    client.release()
+    client.release(releaseError)
   }
   res.json({ success: true })
-})
+}))
 
-app.post('/api/friends/requests/:id/reject', async (req, res) => {
+app.post('/api/friends/requests/:id/reject', ah(async (req, res) => {
   const result = await pool.query(
     "UPDATE friend_request SET status = 'rejected' WHERE id = $1 AND status = 'pending'",
     [req.params.id]
   )
   if (!result.rowCount) return res.status(404).json({ error: 'REQUEST_NOT_FOUND' })
   res.json({ success: true })
-})
+}))
 
-app.get('/api/friends', async (req, res) => {
+app.get('/api/friends', ah(async (req, res) => {
   const user = await getUserByUid(req.query.uid)
   if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   const { rows: friends } = await pool.query(
@@ -979,9 +956,9 @@ app.get('/api/friends', async (req, res) => {
     [user.id]
   )
   res.json({ friends })
-})
+}))
 
-app.post('/api/guestbook/:ownerUid', async (req, res) => {
+app.post('/api/guestbook/:ownerUid', ah(async (req, res) => {
   const owner = await getUserByUid(req.params.ownerUid)
   const visitor = await getUserByUid(req.body?.visitorUid)
   const message = (req.body?.message || '').trim()
@@ -993,9 +970,9 @@ app.post('/api/guestbook/:ownerUid', async (req, res) => {
     message,
   ])
   res.status(201).json({ success: true })
-})
+}))
 
-app.get('/api/guestbook/:ownerUid', async (req, res) => {
+app.get('/api/guestbook/:ownerUid', ah(async (req, res) => {
   const owner = await getUserByUid(req.params.ownerUid)
   if (!owner) return res.status(404).json({ error: 'USER_NOT_FOUND' })
   const { rows: entries } = await pool.query(
@@ -1007,11 +984,11 @@ app.get('/api/guestbook/:ownerUid', async (req, res) => {
     [owner.id]
   )
   res.json({ entries })
-})
+}))
 
 // 친구 목장 방문(Friends.jsx)용 읽기 전용 스냅샷 — 대객체 위치/크기, 배치한 인테리어,
 // 서식지별 등록 현황을 돌려준다. 도감 원본 데이터(사진/그림 dataURL 등)는 내려주지 않는다.
-app.get('/api/ranch/:uid', async (req, res) => {
+app.get('/api/ranch/:uid', ah(async (req, res) => {
   const { rows } = await pool.query(
     'SELECT id, username, nickname, total_login_days AS "totalLoginDays" FROM users WHERE uid = $1',
     [req.params.uid]
@@ -1045,11 +1022,11 @@ app.get('/api/ranch/:uid', async (req, res) => {
     fieldGuideCount: speciesList.filter((s) => s.registered).length,
     fieldGuideTotal: speciesList.length,
   })
-})
+}))
 
 // 친구 도감 구경하기(FriendFieldGuide.jsx)용 — 친구가 등록한 종을 사진/그림 등급까지 그대로
 // 보여준다(FieldGuide.jsx와 같은 화면을 읽기 전용으로 재사용).
-app.get('/api/field-guide/:uid', async (req, res) => {
+app.get('/api/field-guide/:uid', ah(async (req, res) => {
   const { rows } = await pool.query('SELECT id, username, nickname FROM users WHERE uid = $1', [req.params.uid])
   const target = rows[0]
   if (!target) return res.status(404).json({ error: 'USER_NOT_FOUND' })
@@ -1058,33 +1035,54 @@ app.get('/api/field-guide/:uid', async (req, res) => {
   const species = hydrateSpeciesForUser(target, speciesRecords)
 
   res.json({ nickname: target.nickname, species })
-})
+}))
 
-// multer의 파일 크기 초과 등은 라우트 핸들러 진입 전에 발생해서 위 try/catch를 안 거치므로,
-// 이 4-인자 에러 미들웨어가 없으면 Express 기본 500 HTML 페이지가 나가 프론트에서 원인을 알 수 없었다.
+// DB에 연결할 수 없을 때 pg/네트워크가 내는 에러들 — 이런 건 서버 버그가 아니라 "잠시 후 다시"
+// 상황이므로 500 대신 503으로 답해서 프론트가 비밀번호 오류와 구분해 안내할 수 있게 한다.
+const DB_UNAVAILABLE_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'EAI_AGAIN',
+  '08000', '08001', '08003', '08004', '08006', '25006', '28P01', '53300', '57P01', '57P03', 'XX000',
+])
+
+function isDbUnavailableError(err) {
+  return DB_UNAVAILABLE_CODES.has(err?.code) || /timeout|Connection terminated|not queryable|tenant or user not found|max client/i.test(err?.message || '')
+}
+
+// 라우트 핸들러 밖에서 난 에러(multer 파일 크기 초과, JSON 본문 파싱 실패 등)와 ah()로 넘어온 DB
+// 에러를 여기서 한 번에 JSON으로 답한다. 이게 없으면 Express 기본 500 HTML이 나가거나, 아예 응답이
+// 안 가서 프론트에서 원인을 알 수 없었다.
 app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: 'FILE_TOO_LARGE' })
   }
-  console.error('[classify-insect] unexpected error:', err)
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'PAYLOAD_TOO_LARGE' })
+  }
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'INVALID_JSON' })
+  }
+  if (err.code === '23505') {
+    return res.status(409).json({ error: 'CONFLICT' })
+  }
+  if (isDbUnavailableError(err)) {
+    console.error(`[server] db unavailable on ${req.method} ${req.path}:`, err.code || '', err.message)
+    return res.status(503).json({ error: 'DB_UNAVAILABLE' })
+  }
+  console.error(`[server] unexpected error on ${req.method} ${req.path}:`, err)
   res.status(500).json({ error: 'SERVER_ERROR' })
 })
 
-// 라우트 대부분이 try/catch 없이 await pool.query(...)를 바로 쓰는데, DB 쪽 순간적인
-// 네트워크 문제로 그 쿼리 하나가 실패하면 Node가 이걸 처리 안 된 예외로 보고 서버 프로세스
-// 전체를 죽였다 — 로그인/친구요청 등 모든 버튼이 갑자기 응답 없어지던 원인. 요청 하나의
-// 실패가 서버 전체를 죽이지 않도록 마지막 방어선만 둔다(요청 쪽엔 그냥 응답이 안 가고 남).
+// ah()로 감싸지 않은 곳에서 놓친 rejection이 서버 프로세스 전체를 죽이지 않도록 마지막 방어선만 둔다.
 process.on('unhandledRejection', (err) => {
   console.error('[server] unhandled rejection (서버는 계속 떠 있음):', err)
 })
 
-dbReady
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Insect classify proxy listening on http://localhost:${PORT}`)
-    })
-  })
-  .catch((err) => {
-    console.error('[db] schema init failed:', err)
-    process.exit(1)
-  })
+// DB 준비 여부와 상관없이 포트부터 연다. 예전처럼 DB가 준비된 뒤에만 listen하면, DB에 못 붙는
+// 동안 Render가 서버를 영영 "깨우는 중"으로 붙잡고 있어서 로그인 요청이 2분 뒤 502로 끝났다.
+// 스키마 준비는 listen과 동시에 시작하고, DB 라우트는 위의 DB_ROUTES 미들웨어가 준비를 기다린다.
+initSchemaWithRetry()
+app.listen(PORT, () => {
+  console.log(`Insect classify proxy listening on http://localhost:${PORT}`)
+  if (CLIP_ENABLED && process.env.CLIP_PRELOAD === 'true') startClipLoading()
+})

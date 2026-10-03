@@ -1,0 +1,3 @@
+# api/mockApi.js는 예전 프로토타입(app.js)용 목업이라 서버리스 함수가 아니다. Vercel은 api/ 폴더의
+# 파일을 자동으로 함수로 빌드하므로, 실제 API(/api/* → Render 리라이트)와 섞이지 않게 업로드에서 뺀다.
+/api

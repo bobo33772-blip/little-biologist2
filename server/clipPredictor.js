@@ -1,4 +1,3 @@
-import { AutoProcessor, AutoTokenizer, CLIPTextModelWithProjection, CLIPVisionModelWithProjection, RawImage } from '@huggingface/transformers'
 import { INSECT_SPECIES } from '../src/data/insectSpecies.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -7,6 +6,21 @@ import { fileURLToPath } from 'node:url'
 // Transformers.js runs the ONNX-converted equivalent of openai/clip-vit-base-patch32.
 // The Xenova repository contains the browser/Node-compatible ONNX files.
 const MODEL_ID = process.env.CLIP_MODEL_ID || 'Xenova/clip-vit-base-patch32'
+// fp32 원본(텍스트+비전 약 600MB)은 Render 무료 인스턴스(512MB)에 올라가지 않아 프로세스가 메모리
+// 초과로 죽는다. 기본은 8비트 양자화(q8, 약 150MB)를 쓰고, 메모리가 넉넉한 로컬에서는
+// CLIP_DTYPE=fp32로 원본을 쓸 수 있다.
+const CLIP_DTYPE = process.env.CLIP_DTYPE || 'q8'
+// 79장 참조 이미지를 한 번에 비전 모델에 넣으면 중간 활성값만으로도 메모리가 폭증한다 — 나눠서 넣는다.
+const REFERENCE_BATCH_SIZE = 8
+// 다운로드 실패 등으로 로딩이 실패하면, 요청마다 다시 수백 MB를 내려받지 않도록 잠시 쉬었다가 재시도한다.
+const RETRY_COOLDOWN_MS = 5 * 60 * 1000
+
+// transformers.js는 onnxruntime 네이티브 모듈을 함께 불러오는데, 무겁고(메모리) 환경에 따라 로드 자체가
+// 실패할 수 있다. 파일 맨 위에서 import하면 그 실패가 서버 전체(로그인 포함)를 못 뜨게 만들므로,
+// 실제로 그림 판별을 할 때만 불러온다.
+function loadTransformers() {
+  return import('@huggingface/transformers')
+}
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TRAINED_MODEL_PATH = path.join(ROOT_DIR, 'training', 'sketch-model.json')
 
@@ -112,16 +126,42 @@ function softmax(values) {
   return exp.map((value) => value / total)
 }
 
+async function embedReferenceImages(images, processor, visionModel) {
+  const chunks = []
+  for (let start = 0; start < images.length; start += REFERENCE_BATCH_SIZE) {
+    const output = await visionModel(await processor(images.slice(start, start + REFERENCE_BATCH_SIZE)))
+    chunks.push(output.image_embeds)
+  }
+  const width = chunks[0].dims[1]
+  const data = new Float32Array(chunks.reduce((total, chunk) => total + chunk.data.length, 0))
+  let offset = 0
+  for (const chunk of chunks) {
+    data.set(chunk.data, offset)
+    offset += chunk.data.length
+  }
+  return { data, dims: [data.length / width, width] }
+}
+
 let predictorPromise
+let predictor = null
+let lastFailureAt = 0
+
+export function isClipPredictorReady() {
+  return predictor !== null
+}
 
 export function getClipPredictor() {
   if (!predictorPromise) {
+    if (Date.now() - lastFailureAt < RETRY_COOLDOWN_MS) {
+      return Promise.reject(new Error('CLIP load failed recently; retrying after cooldown'))
+    }
     predictorPromise = (async () => {
+      const { AutoProcessor, AutoTokenizer, CLIPTextModelWithProjection, CLIPVisionModelWithProjection, RawImage } = await loadTransformers()
       const [processor, tokenizer, textModel, visionModel] = await Promise.all([
         AutoProcessor.from_pretrained(MODEL_ID),
         AutoTokenizer.from_pretrained(MODEL_ID),
-        CLIPTextModelWithProjection.from_pretrained(MODEL_ID),
-        CLIPVisionModelWithProjection.from_pretrained(MODEL_ID),
+        CLIPTextModelWithProjection.from_pretrained(MODEL_ID, { dtype: CLIP_DTYPE }),
+        CLIPVisionModelWithProjection.from_pretrained(MODEL_ID, { dtype: CLIP_DTYPE }),
       ])
       const candidatePrompts = SPECIES.map((item) => `a child's drawing of a ${item.en_name}, a doodle or sketch`)
       const descriptions = SPECIES.map((item) => item.description)
@@ -136,12 +176,16 @@ export function getClipPredictor() {
         try { referenceImages.push(await RawImage.read(imagePath)) } catch { referenceImages.push(null) }
       }
       const validReferences = referenceImages.filter(Boolean)
-      const referenceOutput = validReferences.length ? await visionModel(await processor(validReferences)) : null
-      const referenceFeatures = referenceOutput ? normalize(referenceOutput.image_embeds) : null
+      const referenceFeatures = validReferences.length ? normalize(await embedReferenceImages(validReferences, processor, visionModel)) : null
       let trainedSketchModel = null
       try { trainedSketchModel = JSON.parse(await fs.readFile(TRAINED_MODEL_PATH, 'utf8')) } catch { /* training data is optional */ }
-      return { processor, tokenizer, textModel, visionModel, candidateFeatures: normalize(candidateOutput.text_embeds), descriptionFeatures: normalize(descriptionOutput.text_embeds), referenceFeatures, trainedSketchModel }
-    })()
+      predictor = { processor, tokenizer, textModel, visionModel, candidateFeatures: normalize(candidateOutput.text_embeds), descriptionFeatures: normalize(descriptionOutput.text_embeds), referenceFeatures, trainedSketchModel }
+      return predictor
+    })().catch((error) => {
+      predictorPromise = undefined
+      lastFailureAt = Date.now()
+      throw error
+    })
   }
   return predictorPromise
 }
@@ -179,6 +223,7 @@ export async function predictDrawing(buffer, hintText = '') {
 
 async function embedImage(buffer, predictor) {
   predictor ||= await getClipPredictor()
+  const { RawImage } = await loadTransformers()
   const image = await RawImage.read(new Blob([buffer]))
   const imageOutput = await predictor.visionModel(await predictor.processor(image))
   return normalize(imageOutput.image_embeds)

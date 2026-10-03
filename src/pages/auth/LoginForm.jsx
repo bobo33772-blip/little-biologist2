@@ -1,8 +1,30 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { User, Lock } from 'lucide-react'
-import { useAuth } from '../../router/AuthContext'
+import { clearAuthNotice, readAuthNotice, useAuth } from '../../router/AuthContext'
+import { postAuth } from '../../api/auth'
 import AuthToast from './AuthToast'
+
+// 이 시간이 지나도 응답이 없으면 서버가 잠에서 깨는 중일 가능성이 크다는 안내를 띄운다.
+const SLOW_HINT_DELAY_MS = 5000
+
+// 예전에는 응답이 실패하면 상태 코드와 상관없이 전부 "비밀번호가 일치하지 않아요"를 보여줘서,
+// 서버/DB가 죽어 있어도 사용자는 비밀번호를 잘못 친 줄 알았다. 이제 401만 비밀번호 오류로 안내한다.
+function getLoginErrorMessage(status) {
+  if (status === 401) return '아이디 또는 비밀번호가 일치하지 않아요.'
+  if (status === 400) return '아이디와 비밀번호를 입력해주세요.'
+  if (status === 'timeout') return '서버 응답이 너무 늦어요. 잠시 후 다시 시도해주세요.'
+  return '서버가 잠시 응답하지 않아요. 잠시 후 다시 시도해주세요.'
+}
+
+const NOTICE_MESSAGES = {
+  'state-load-failed': '서버 연결이 불안정해서 진행도를 불러오지 못했어요. 잠시 후 다시 로그인해주세요.',
+}
+
+function getInitialToast() {
+  const message = NOTICE_MESSAGES[readAuthNotice()]
+  return message ? { type: 'error', message } : null
+}
 
 export default function LoginForm() {
   const navigate = useNavigate()
@@ -10,7 +32,12 @@ export default function LoginForm() {
   const [id, setId] = useState('')
   const [password, setPassword] = useState('')
   const [status, setStatus] = useState('idle') // idle | loading | error
-  const [toast, setToast] = useState(null)
+  const [isSlow, setIsSlow] = useState(false)
+  const [toast, setToast] = useState(getInitialToast)
+
+  useEffect(() => {
+    clearAuthNotice()
+  }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -27,25 +54,18 @@ export default function LoginForm() {
     }
     setStatus('loading')
     setToast(null)
-    try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: id, password }),
-      })
-      if (!response.ok) {
-        setStatus('error')
-        setToast({ type: 'error', message: '아이디 또는 비밀번호가 일치하지 않아요.' })
-        return
-      }
-      const { user } = await response.json()
-      setStatus('idle')
-      login(user)
-      navigate('/ranch')
-    } catch {
+    const slowTimer = window.setTimeout(() => setIsSlow(true), SLOW_HINT_DELAY_MS)
+    const result = await postAuth('/api/login', { username: id, password })
+    window.clearTimeout(slowTimer)
+    setIsSlow(false)
+    if (!result.ok || !result.data.user) {
       setStatus('error')
-      setToast({ type: 'error', message: '로그인 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.' })
+      setToast({ type: 'error', message: getLoginErrorMessage(result.status) })
+      return
     }
+    setStatus('idle')
+    login(result.data.user)
+    navigate('/ranch')
   }
 
   return (
@@ -96,6 +116,11 @@ export default function LoginForm() {
         >
           {status === 'loading' ? '로그인 중...' : '로그인'}
         </button>
+        {isSlow && (
+          <p className="text-center text-sm font-bold text-bark-800" role="status">
+            서버를 깨우는 중이에요. 오랜만이면 1분쯤 걸려요.
+          </p>
+        )}
 
         <Link
           to="/signup"

@@ -31,21 +31,23 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// 서버가 막 켜졌을 때는 CLIP 모델을 아직 불러오는 중이라 503을 반환한다. 그동안은 사용자에게
-// 에러를 바로 보여주지 않고, 모델이 준비될 때까지 조용히 재시도한다.
+// CLIP 모델은 첫 그림 판별 요청 때 서버가 불러오기 시작하고, 그동안은 503을 반환한다. Render 무료
+// 서버에서는 모델을 내려받아 준비하는 데 몇 분 걸릴 수 있어서, 시도 횟수 대신 시간 한도로 조용히
+// 재시도한다. 한도가 지나면 마지막 503 응답을 그대로 돌려줘서 화면이 "준비 중" 안내를 띄우게 한다.
+const PREDICTION_RETRY_DEADLINE_MS = 3 * 60 * 1000
+const PREDICTION_RETRY_INTERVAL_MS = 3000
+
 async function requestPrediction(endpoint, formData) {
-  let lastError
-  for (let attempt = 0; attempt < 15; attempt += 1) {
+  const deadline = Date.now() + PREDICTION_RETRY_DEADLINE_MS
+  for (;;) {
     try {
       const response = await fetch(endpoint, { method: 'POST', body: formData })
-      if (response.ok || response.status !== 503) return response
-      lastError = new Error('CLIP model is still loading')
+      if (response.status !== 503 || Date.now() >= deadline) return response
     } catch (error) {
-      lastError = error
+      if (Date.now() >= deadline) throw error
     }
-    await wait(2000)
+    await wait(PREDICTION_RETRY_INTERVAL_MS)
   }
-  throw lastError || new Error('Prediction server is unavailable')
 }
 
 const HINTS = [
@@ -212,7 +214,9 @@ export default function Exploration() {
           } else if (body?.error === 'EMPTY_DRAWING') {
             setHint('그림이 아직 너무 비어 있어요. 곤충의 윤곽이 보이게 조금 더 그려 주세요.')
           } else if (body?.error === 'CLIP_UNAVAILABLE') {
-            setHint('AI 모델을 준비하지 못했어요. 서버를 다시 시작해주세요.')
+            setHint('AI가 아직 그림을 볼 준비를 하고 있어요. 1~2분 뒤에 다시 해볼까요?')
+          } else if (body?.error === 'CLIP_DISABLED') {
+            setHint('지금은 그림 판별 기능을 쓸 수 없어요.')
           } else if (response.status === 404) {
             setHint('이전 버전 서버에 연결되어 있어요. 실행 중인 서버를 모두 종료하고 npm run dev를 다시 실행해주세요.')
           } else {
@@ -240,7 +244,7 @@ export default function Exploration() {
         }
       } catch (err) {
         console.error('[exploration] 분석 요청 실패:', err)
-        setHint('AI 서버에 연결하지 못했어요. npm run dev가 실행 중인지 확인해주세요.')
+        setHint('AI 서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요.')
         setStatus('lowConfidence')
       }
       return

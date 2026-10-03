@@ -11,6 +11,10 @@
     {
       "source": "/chat",
       "destination": "https://little-biologist2.onrender.com/chat"
+    },
+    {
+      "source": "/((?!api/|assets/).*)",
+      "destination": "/index.html"
     }
   ]
 }

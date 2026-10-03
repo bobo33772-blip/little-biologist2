@@ -4,7 +4,19 @@ import pg from 'pg'
 const { Pool } = pg
 
 // Supabase Session pooler를 쓴다 — 계속 떠 있는 Express 서버에 맞고, 모든 쿼리가 비동기다.
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+if (!process.env.DATABASE_URL) {
+  console.error('[db] DATABASE_URL이 비어 있음 — .env 또는 Render > Environment를 확인하세요')
+}
+// 타임아웃이 없으면 DB가 응답하지 않을 때(Supabase 프로젝트 일시정지 등) 서버 부팅과 요청이
+// 끝없이 매달린다. 연결/쿼리에 상한을 둬서 실패를 빨리 드러내고 503으로 응답할 수 있게 한다.
+// query_timeout은 사진(base64)이 많은 계정의 진행도 조회도 견디도록 넉넉하게 두되, Vercel
+// 프록시 한도(120초)보다는 짧게 잡는다.
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 15000,
+  query_timeout: 60000,
+  keepAlive: true,
+})
 
 // pg.Pool은 유휴 커넥션이 네트워크 문제로 끊기면 'error' 이벤트를 낸다. 리스너가 없으면
 // Node가 이걸 uncaught exception으로 취급해서 서버 프로세스 전체가 죽는다 — 일시적인
@@ -21,7 +33,7 @@ pool.on('error', (err) => {
 //만들어 바로 쓰는 방식이라 서버가 id를 발급하는 정규화 테이블과 안 맞는다(scripts/seed-supabase.js
 // 주석 참고). shop_item/bag_item/ranch_placement/gacha_pull/purchase_history는 나중에
 // Shop.jsx를 실제 서버 연동으로 바꿀 때를 위한 뼈대로만 만들어두고, 이번엔 시딩도 배선도 안 한다.
-async function initSchema() {
+export async function initSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id                BIGSERIAL PRIMARY KEY,
@@ -233,9 +245,63 @@ async function initSchema() {
   `)
 }
 
-// index.js가 라우트를 등록하기 전에(또는 첫 요청 전에) 스키마 준비가 끝나길 기다릴 수 있도록
-// 프라미스 자체를 내보낸다.
-export const dbReady = initSchema()
+// 예전에는 import 시점에 initSchema()를 한 번만 실행하고, 실패하면 index.js가 process.exit(1)로
+// 서버를 끝내버렸다. 그래서 Supabase 무료 프로젝트가 장기 미사용으로 일시정지되자 Render가 깨울
+// 때마다 서버가 포트를 열기도 전에 죽어서, DB와 상관없는 화면까지 전부 무응답이 됐다(로그인 불가의
+// 원인). 이제 서버는 먼저 포트를 열고, 스키마 준비는 성공할 때까지 백그라운드에서 재시도한다.
+let dbReady = false
+let markDbReady
+const dbReadyPromise = new Promise((resolve) => {
+  markDbReady = resolve
+})
+
+export function isDbReady() {
+  return dbReady
+}
+
+// 준비될 때까지 최대 ms만큼 기다린다. Render가 잠든 서버를 깨우는 동안 붙잡아 둔 첫 로그인 요청은
+// 포트가 열리자마자 들어오는데, 그 순간엔 아직 스키마 준비(DB 첫 연결)가 끝나지 않았을 수 있다 —
+// 바로 503을 주지 않고 잠깐 기다려서 첫 로그인이 실패하지 않게 한다.
+export function waitForDbReady(ms) {
+  if (dbReady) return Promise.resolve(true)
+  return Promise.race([
+    dbReadyPromise.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), ms)),
+  ])
+}
+
+function setDbReady() {
+  dbReady = true
+  markDbReady()
+}
+
+async function usersTableExists() {
+  const { rows } = await pool.query("SELECT to_regclass('public.users') IS NOT NULL AS ok")
+  return rows[0]?.ok === true
+}
+
+export async function initSchemaWithRetry() {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await initSchema()
+      setDbReady()
+      console.log('[db] schema ready')
+      return
+    } catch (err) {
+      // 25006 = Supabase 무료 용량(500MB) 초과로 DB가 읽기 전용이 된 상태. CREATE TABLE만 막히고
+      // 조회는 되므로, 테이블이 이미 있으면 준비된 것으로 보고 계속 간다(로그인 등 읽기는 가능).
+      if (err.code === '25006' && (await usersTableExists().catch(() => false))) {
+        setDbReady()
+        console.error('[db] DB가 읽기 전용 모드 — Supabase 대시보드에서 DB 용량을 확인하세요')
+        return
+      }
+      // Render 로그에서 원인을 바로 알 수 있게 코드와 메시지를 같이 남긴다
+      // (예: "Tenant or user not found" = 일시정지/잘못된 프로젝트, 28P01 = 비밀번호 불일치).
+      console.error(`[db] schema init failed (attempt ${attempt}):`, err.code || '', err.message)
+      await new Promise((resolve) => setTimeout(resolve, Math.min(30000, 2000 * attempt)))
+    }
+  }
+}
 
 // uid는 계정당 최초 1회만 발급되고 이후 고정된다 (친구 추가용 공개 식별자).
 export function generateUid() {

@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { User, Lock, Sprout } from 'lucide-react'
 import { useAuth } from '../../router/AuthContext'
+import { postAuth } from '../../api/auth'
 import AuthToast from './AuthToast'
+
+function getSignupErrorMessage(status) {
+  if (status === 409) return '이미 사용 중인 아이디예요.'
+  if (status === 400) return '아이디, 비밀번호, 닉네임을 모두 입력해주세요.'
+  // 응답만 늦었을 뿐 가입 자체는 됐을 수 있다 — 다시 가입하면 "이미 사용 중"이 뜨므로 로그인을 권한다.
+  if (status === 'timeout') return '응답이 늦어요. 가입이 됐을 수도 있으니 먼저 로그인해보세요.'
+  return '서버가 잠시 응답하지 않아요. 잠시 후 다시 시도해주세요.'
+}
 
 export default function SignupForm() {
   const navigate = useNavigate()
@@ -10,6 +19,7 @@ export default function SignupForm() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [nickname, setNickname] = useState('')
+  const [status, setStatus] = useState('idle') // idle | loading
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -20,25 +30,17 @@ export default function SignupForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!username || !password || !nickname) return
+    if (!username || !password || !nickname || status === 'loading') return
+    setStatus('loading')
     setToast(null)
-    try {
-      const response = await fetch('/api/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, nickname }),
-      })
-      if (!response.ok) {
-        const { error } = await response.json().catch(() => ({}))
-        setToast({ type: 'error', message: error === 'USERNAME_TAKEN' ? '이미 사용 중인 아이디예요.' : '회원가입 중 문제가 발생했어요.' })
-        return
-      }
-      const { user } = await response.json()
-      login(user)
-      navigate('/ranch', { state: { firstLogin: true } })
-    } catch {
-      setToast({ type: 'error', message: '회원가입 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.' })
+    const result = await postAuth('/api/signup', { username, password, nickname })
+    setStatus('idle')
+    if (!result.ok || !result.data.user) {
+      setToast({ type: 'error', message: getSignupErrorMessage(result.status) })
+      return
     }
+    login(result.data.user)
+    navigate('/ranch', { state: { firstLogin: true } })
   }
 
   return (
@@ -98,9 +100,10 @@ export default function SignupForm() {
 
         <button
           type="submit"
+          disabled={status === 'loading'}
           className="mt-1 flex items-center justify-center gap-2 rounded-full bg-gradient-to-b from-lime-500 to-emerald-700 px-4 py-3.5 text-lg font-extrabold text-white shadow-[0_6px_0_0_#3f6212] [text-shadow:0_1px_2px_rgba(0,0,0,0.25)] transition-transform active:translate-y-1.5 active:shadow-[0_2px_0_0_#3f6212] disabled:opacity-60 disabled:active:translate-y-0 disabled:active:shadow-[0_6px_0_0_#3f6212]"
         >
-          가입하고 알 만나기
+          {status === 'loading' ? '가입하는 중...' : '가입하고 알 만나기'}
         </button>
 
         <Link

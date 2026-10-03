@@ -3,7 +3,7 @@
 // 다시 실행하기만 하면 된다(멱등 — 전부 ON CONFLICT DO UPDATE).
 // 실행: node scripts/seed-supabase.js
 import 'dotenv/config'
-import { pool, dbReady } from '../server/db.js'
+import { pool, initSchema } from '../server/db.js'
 import { HABITATS, INSECT_SPECIES } from '../src/data/insectSpecies.js'
 import { DAILY_MISSION_CANDIDATES } from '../src/data/dailyMissions.js'
 import { WEEKLY_MISSION_CANDIDATES } from '../src/data/weeklyMissions.js'
@@ -103,7 +103,8 @@ async function seedMissionDefinitions() {
 }
 
 async function main() {
-  await dbReady
+  // 서버와 달리 시드는 재시도 없이 한 번만 시도한다 — DB에 못 붙으면 바로 실패를 보여주는 게 낫다.
+  await initSchema()
   const habitatIdByCode = await seedHabitats()
   await seedSpecies(habitatIdByCode)
   await seedMissionDefinitions()
