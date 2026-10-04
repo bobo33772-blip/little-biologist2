@@ -6,6 +6,7 @@ import { getFeaturedCharacterIdentity } from '../data/representativeCharacter'
 import { useAuth } from '../router/AuthContext'
 import { useQuests } from '../context/QuestsContext'
 import { reportMissionEvent } from '../utils/missionEvents'
+import { apiUrl } from '../api/base'
 
 // ai-companion.md: 대표 알 AI / 곤충 페르소나 AI 역할 분리, 음성 입력 실패 시 텍스트 입력 가능,
 // 시스템 프롬프트·API 키 비노출(실제 호출은 server/index.js의 /chat 프록시가 담당). 안전 규칙:
@@ -144,7 +145,7 @@ function localReply(question, insect, insectFlavor, previousMessages = [], compa
 }
 
 async function askServer(message, history, context, sessionId) {
-  const response = await fetch('/chat', {
+  const response = await fetch(apiUrl('/chat'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

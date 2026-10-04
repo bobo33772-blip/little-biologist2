@@ -21,6 +21,7 @@ import { reportMissionEvent } from '../utils/missionEvents'
 import { isQuizCompletedToday } from '../utils/quizAvailability'
 import { fetchUserState, saveUserState } from '../api/userState'
 import ResultModal from '../components/common/ResultModal'
+import { apiUrl } from '../api/base'
 
 // 위치 권한을 못 받거나 실패했을 때 쓰는 기본 좌표(서울 시청).
 const DEFAULT_LOCATION = { latitude: 37.5665, longitude: 126.978 }
@@ -146,7 +147,7 @@ export default function Ranch() {
     if (!user?.uid) return
     setIsGuestbookLoading(true)
     try {
-      const response = await fetch(`/api/guestbook/${user.uid}`)
+      const response = await fetch(apiUrl(`/api/guestbook/${user.uid}`))
       const { entries } = await response.json()
       setGuestbookEntries(entries || [])
     } catch {

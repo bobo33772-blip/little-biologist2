@@ -894,6 +894,27 @@ app.get('/api/users/:uid', ah(async (req, res) => {
   res.json({ user: { uid: user.uid, nickname: user.nickname } })
 }))
 
+// 앱(Capacitor)은 로그인을 기기에 유지해서 매일 /api/login을 다시 부르지 않는다. 그러면 로그인할 때만
+// 오르던 출석 일수(칭호 조건에도 쓰임)가 멈추므로, 저장된 로그인으로 화면이 열리거나 다시 보일 때
+// 프론트(AuthContext)가 이 경로로 오늘 출석을 반영한다. /api/login과 같은 규칙(UTC 날짜 기준 하루 한 번)이고,
+// 조건부 UPDATE 한 문장이라 여러 번(동시에) 불려도 하루에 한 번만 오른다.
+app.post('/api/users/:uid/attendance', ah(async (req, res) => {
+  const user = await getUserByUid(req.params.uid)
+  if (!user) return res.status(404).json({ error: 'USER_NOT_FOUND' })
+  try {
+    await pool.query(
+      'UPDATE users SET total_login_days = total_login_days + 1, last_login_date = $1 WHERE id = $2 AND last_login_date IS DISTINCT FROM $1',
+      [todayDateKey(), user.id]
+    )
+  } catch (err) {
+    // /api/login과 마찬가지로 DB가 읽기 전용(25006)이면 출석 갱신만 건너뛴다.
+    if (err.code !== '25006') throw err
+    console.error('[attendance] DB가 읽기 전용이라 출석 갱신을 건너뜀')
+  }
+  const { rows } = await pool.query('SELECT total_login_days AS "totalLoginDays" FROM users WHERE id = $1', [user.id])
+  res.json({ totalLoginDays: rows[0]?.totalLoginDays ?? null })
+}))
+
 app.post('/api/friends/requests', ah(async (req, res) => {
   const { requesterUid, targetUid } = req.body || {}
   const requester = await getUserByUid(requesterUid)
