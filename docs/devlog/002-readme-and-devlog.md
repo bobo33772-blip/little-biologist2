@@ -5,7 +5,7 @@
 - 계기: 포트폴리오로 정리하려니 두 가지가 부족했다.
   - GitHub README만 봐서는 리틀 바이올로지스트가 무슨 서비스인지 알기 어려웠다.
   - 기능을 왜 그렇게 만들었는지 남아 있는 기록이 없었다.
-- 관련 커밋: 이 기록과 같은 커밋 (docs: README·SETUP·개발 기록)
+- 관련 커밋: `7e27bd9` docs: rewrite README as a service overview and start a portfolio devlog
 
 ## 1. 배경
 

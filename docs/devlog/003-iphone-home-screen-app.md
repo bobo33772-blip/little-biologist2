@@ -5,7 +5,7 @@
 - 계기
   - 안드로이드 앱([001](001-web-to-android-app.md))을 만든 뒤, 사용자의 폰이 **아이폰(iOS)** 이라는 것을 알게 됐다.
   - 안드로이드 APK는 아이폰에 설치할 수 없어서, 아이폰에서 앱처럼 플레이할 방법이 필요했다.
-- 관련 커밋: 이 기록과 같은 커밋 (feat: 아이폰 홈 화면 웹 앱 지원과 첫 화면 분기 수정)
+- 관련 커밋: `49f8a8d` feat(app): play on iPhone as a home screen web app; open the ranch when logged in
 
 ## 1. 배경
 
@@ -89,6 +89,7 @@ Playwright(Chromium)로 실제 빌드를 띄워 확인했다.
 | 매니페스트 | Chrome DevTools `Page.getAppManifest` 파싱 오류 0개, `Page.getInstallabilityErrors` 문제 없음 |
 | 아이콘 | `apple-touch-icon.png`가 `image/png`로 제공됨. 원형·둥근 사각 마스크로 잘라 미리보기 확인 |
 | 린트·빌드 | `eslint src server`, `vite build` 통과 |
+| 안드로이드 APK 재빌드 | 첫 화면 수정이 들어간 APK를 GitHub Actions([실행 #2](https://github.com/bobo33772-blip/little-biologist2/actions/runs/37198144001))로 다시 빌드. 성공(Gradle 23초, 캐시 사용) |
 
 ## 5. 한계와 남은 일
 
