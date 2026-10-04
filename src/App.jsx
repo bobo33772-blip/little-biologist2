@@ -12,6 +12,7 @@ import BackgroundMusicController from './components/common/BackgroundMusicContro
 import ButtonSoundController from './components/common/ButtonSoundController'
 import SoundAssetPreloader from './components/common/SoundAssetPreloader'
 import LoadingOverlay from './components/common/LoadingOverlay'
+import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandler'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
 
@@ -46,6 +47,7 @@ export default function App() {
       <ButtonSoundController />
       <SoundAssetPreloader />
       <GrowthStageModal />
+      <AndroidBackButtonHandler />
       <Suspense fallback={<LoadingOverlay />}>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />

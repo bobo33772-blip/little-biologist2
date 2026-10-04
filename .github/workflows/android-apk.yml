@@ -1,0 +1,70 @@
+# 푸시할 때마다 안드로이드 디버그 APK를 자동으로 빌드한다.
+# - Android Studio 없이도 Actions 실행 결과의 Artifacts에서 APK를 받아 폰에 설치해 볼 수 있다.
+# - 웹 코드나 android/ 설정을 바꿨을 때 앱 빌드가 깨지지 않았는지 확인하는 용도도 겸한다.
+# 탐험 화면 지도를 APK에서도 쓰려면 저장소 Settings > Secrets and variables > Actions에
+# VITE_GOOGLE_MAPS_API_KEY를 등록한다(없으면 지도만 안 뜨고 나머지는 정상 동작).
+name: Android 디버그 APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'IMAGE/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'tailwind.config.js'
+      - 'postcss.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      # 서버 전용 패키지(sharp, onnxruntime 등)의 설치 스크립트는 앱 빌드에 필요 없어서 건너뛴다.
+      - name: 의존성 설치
+        run: npm ci --ignore-scripts
+
+      - name: 웹 빌드 후 안드로이드 프로젝트로 복사
+        env:
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: 디버그 APK 빌드
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: little-biologist-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          archive: false
+          retention-days: 14

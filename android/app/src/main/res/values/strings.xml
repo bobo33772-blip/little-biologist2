@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">리틀 바이올로지스트</string>
+    <string name="title_activity_main">리틀 바이올로지스트</string>
+    <string name="package_name">com.littlebiologist.app</string>
+    <string name="custom_url_scheme">com.littlebiologist.app</string>
+</resources>
