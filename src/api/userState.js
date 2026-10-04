@@ -1,6 +1,7 @@
 // 계정별 진행도(퀘스트/업적/도감등록/나뭇잎/목장배치 등)를 server/db.js의 user_state 테이블에
 // 저장/조회하는 얇은 클라이언트. 키 하나가 기존에 각 Context가 쓰던 localStorage 키 하나에 대응한다.
 import { forceRelogin } from '../router/AuthContext'
+import { apiUrl } from './base'
 
 // 서버가 막 깨어났거나 DB 연결이 잠깐 끊긴 경우를 넘기기 위한 재시도 간격.
 const LOAD_RETRY_DELAYS_MS = [2000, 5000, 10000]
@@ -31,7 +32,7 @@ export async function fetchUserState(uid) {
 async function loadUserStateWithRetry(uid) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const response = await fetch(`/api/state/${uid}`)
+      const response = await fetch(apiUrl(`/api/state/${uid}`))
       if (response.ok) {
         const { state } = await response.json()
         // 실패 후 같은 탭에서 다시 로그인해 새로 불러온 경우 — 이제 모든 Context가 진짜 값을 가지므로 저장을 다시 허용한다.
@@ -53,7 +54,7 @@ async function loadUserStateWithRetry(uid) {
 export async function saveUserState(uid, key, value) {
   if (!uid || loadFailedUids.has(uid)) return
   try {
-    await fetch(`/api/state/${uid}/${key}`, {
+    await fetch(apiUrl(`/api/state/${uid}/${key}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value }),

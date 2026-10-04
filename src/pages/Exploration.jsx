@@ -17,6 +17,7 @@ import { getInsectDrawingGuide } from '../data/insectDrawingGuides'
 import { playSfx } from '../utils/sound'
 import { SFX } from '../utils/sfx'
 import { reportMissionEvent } from '../utils/missionEvents'
+import { apiUrl } from '../api/base'
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -39,11 +40,11 @@ const PREDICTION_RETRY_INTERVAL_MS = 3000
 
 async function requestPrediction(endpoint, formData) {
   // 재시도는 CLIP 모델 준비를 기다리는 그림 판별에만 쓴다 — 사진 분석(iNaturalist)은 한 번만 보낸다.
-  if (endpoint !== '/api/predict-drawing') return fetch(endpoint, { method: 'POST', body: formData })
+  if (endpoint !== '/api/predict-drawing') return fetch(apiUrl(endpoint), { method: 'POST', body: formData })
   const deadline = Date.now() + PREDICTION_RETRY_DEADLINE_MS
   for (;;) {
     try {
-      const response = await fetch(endpoint, { method: 'POST', body: formData })
+      const response = await fetch(apiUrl(endpoint), { method: 'POST', body: formData })
       if (response.status !== 503 || Date.now() >= deadline) return response
     } catch (error) {
       if (Date.now() >= deadline) throw error

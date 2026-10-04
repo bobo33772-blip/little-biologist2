@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        appCategory="game": Android 16(API 36) 타깃부터 태블릿 등 큰 화면(sw600dp 이상)에서는
+        screenOrientation 고정이 무시되는데, 게임으로 분류된 앱은 예외라서 태블릿에서도 가로 고정이 유지된다.
+    -->
+    <application
+        android:allowBackup="true"
+        android:appCategory="game"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <!-- 목장·로그인 화면이 가로(태블릿·PC) 기준으로 디자인되어 있어서 가로로 고정한다(좌우 뒤집기는 허용). -->
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Permissions -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        목장 날씨(Ranch.jsx)와 탐험의 동네 생태 지도(NeighborhoodMap.jsx)가 navigator.geolocation을 쓴다.
+        Capacitor WebView는 위치 요청 시 두 권한을 함께 런타임 요청하므로 둘 다 선언해야 한다.
+        사진 업로드는 시스템 파일 선택기를 써서 카메라·저장소 권한이 필요 없다.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+</manifest>

@@ -18,9 +18,11 @@ npm install
 - `dotenv` — `.env` 환경변수 로드
 - `openai` — AI 말벗 챗봇(`/chat`)에서 OpenAI API 호출
 - `framer-motion` — 목장 대객체 진입 시 존 배너 효과 애니메이션
+- `@capacitor/core`, `@capacitor/android`, `@capacitor/app` — 같은 웹 코드를 안드로이드 앱으로 감싸기(7번), 하드웨어 뒤로가기 처리
 
 ### 개발용 패키지 (devDependencies)
 - `vite`, `@vitejs/plugin-react` — 개발 서버·빌드
+- `@capacitor/cli` — `npx cap sync`/`cap open` 등 앱 빌드 명령
 - `concurrently` — `npm run dev` 실행 시 vite(프론트)와 프록시 서버(API)를 동시에 실행
 - `tailwindcss`, `postcss`, `autoprefixer` — 스타일
 - `eslint`, `eslint-plugin-react`, `eslint-plugin-react-hooks` — 코드 검사
@@ -124,3 +126,102 @@ vite(프론트, 5173)와 프록시 서버(API, 5174)가 동시에 뜹니다. 두
    `https://little-biologist2.onrender.com/api/health`에서 `inat`이 `"mode":"oauth"`, `"lastRefreshOk":true`이고
    `expiresAt`이 약 24시간 뒤면 성공이에요. `lastRefreshOk`가 `false`면 Render Logs의 `[inat-auth] JWT 갱신 실패`를 보세요.
 5. 토큰이 유출되면 https://www.inaturalist.org/oauth/authorized_applications 에서 취소하고 3번을 다시 해요.
+
+## 7. 안드로이드 앱 빌드
+
+같은 웹 코드(`src/`)를 [Capacitor](https://capacitorjs.com/)로 감싼 안드로이드 앱이에요. 왜 이렇게 만들었는지는
+[개발 기록 001](docs/devlog/001-web-to-android-app.md)에 정리돼 있어요.
+
+### 가장 쉬운 방법: 자동 빌드된 APK 받기
+
+1. GitHub 저장소 > **Actions** > **Android 디버그 APK**에서 가장 최근 실행(초록색 체크)을 열어요.
+   - 앱에 영향을 주는 파일(`src/`, `public/`, `android/` 등)을 푸시하면 자동으로 빌드돼요.
+   - 직접 돌리려면 **Run workflow**를 눌러요. 이 버튼은 워크플로가 `main` 브랜치에 합쳐진 뒤부터 보여요.
+2. 아래쪽 **Artifacts**의 `app-debug.apk`를 받아요. GitHub에 로그인해야 받을 수 있고, 14일 동안 보관돼요.
+3. 폰으로 옮겨 설치해요. 처음이면 "출처를 알 수 없는 앱 설치"를 허용해야 해요.
+
+### 내 PC에서 빌드하기 (Android Studio)
+
+준비물
+- Node.js 22 이상
+- [Android Studio](https://developer.android.com/studio) Otter(2025.2.1) 이상. JDK와 Android SDK가 함께 설치돼요.
+- 테스트할 안드로이드 폰(개발자 옵션 > **USB 디버깅** 켜기) 또는 Android Studio의 에뮬레이터
+
+```
+npm install
+npm run app:android
+```
+
+1. `npm run app:android`는 웹 빌드 → `android/`로 복사(`cap sync`) → Android Studio 열기를 한 번에 해요.
+2. Android Studio가 처음 열리면 Gradle 동기화가 끝날 때까지 기다려요.
+3. 위쪽에서 기기를 고르고 ▶ **Run**을 누르면 폰에 설치돼요.
+4. 웹 코드를 고친 뒤에는 `npm run app:sync`를 실행하고 다시 ▶ **Run**을 눌러요.
+   - 복사된 웹 파일(`android/app/src/main/assets/public`)은 git에 올라가지 않으니, 받은 직후에도 한 번은 꼭 sync해야 해요.
+
+### 앱이 웹과 다르게 동작하는 부분
+
+| 항목 | 웹 | 앱 | 관련 코드 |
+|---|---|---|---|
+| 서버 주소 | `/api` 상대 경로(Vercel 리라이트·vite 프록시) | `https://little-biologist2.onrender.com` 직접 호출(`VITE_API_BASE_URL`로 변경 가능) | `src/api/base.js` |
+| 로그인 유지 | 탭을 닫으면 로그아웃(`sessionStorage`) | 앱을 껐다 켜도 유지(`localStorage`) | `src/router/AuthContext.jsx` |
+| 출석 일수 | 로그인할 때 +1 | 로그인을 유지하므로 화면이 열릴 때 하루 한 번 출석 체크(`POST /api/users/:uid/attendance`) | 같은 파일, `server/index.js` |
+| 화면 방향 | 자유 | 가로 고정. 태블릿도 유지되도록 `appCategory="game"` | `android/app/src/main/AndroidManifest.xml` |
+| 뒤로가기 버튼 | 브라우저 기능 | 목장·로그인에서 두 번 누르면 종료, 그 밖에는 이전 화면 | `src/components/common/AndroidBackButtonHandler.jsx` |
+
+### 설정 체크리스트
+
+- **서버 배포**: 출석 체크 API는 Render 서버 코드에 들어 있어요. 이 변경이 Render에 배포돼야 앱에서 출석 일수가 올라요. 배포 전에는 출석만 멈추고 나머지는 정상이에요.
+- **Google Maps 키**: 앱에서 동네 생태 지도가 뜨게 하려면 두 가지가 필요해요.
+  - Google Cloud 콘솔 > API 키 > 웹사이트 제한에 `https://localhost/*`(Android)를 추가해요. iOS를 만들면 `capacitor://localhost/*`도 추가해요.
+  - 자동 빌드 APK에 키를 넣으려면 저장소 Settings > Secrets and variables > Actions에 `VITE_GOOGLE_MAPS_API_KEY`를 등록해요. 키가 없어도 지도만 안 뜨고 나머지는 정상이에요.
+- **Render 무료 서버**: 15분 동안 요청이 없으면 잠들어서, 앱에서도 첫 로그인이 1분 가까이 걸릴 수 있어요(4번 참고).
+- **앱 ID와 이름**: 지금은 `com.littlebiologist.app` / `리틀 바이올로지스트`예요.
+  - 앱 ID는 스토어에 처음 올린 뒤에는 바꿀 수 없어요.
+  - 바꾸려면 출시 전에 아래를 함께 수정해요.
+    - `capacitor.config.json`의 `appId`
+    - `android/app/build.gradle`의 `namespace`·`applicationId`
+    - `MainActivity.java`의 패키지 경로
+
+## 8. 아이폰에서 플레이하기
+
+iOS 앱을 빌드하려면 Mac과 Xcode가 필요해요. 그래서 아이폰은 먼저 **홈 화면 웹 앱**으로 플레이해요.
+왜 이렇게 정했는지는 [개발 기록 003](docs/devlog/003-iphone-home-screen-app.md)에 있어요.
+
+### 홈 화면 앱으로 설치하기 (무료, Mac 불필요)
+
+1. 아이폰 **Safari**로 운영 주소 `https://little-biologist2.vercel.app`을 열어요.
+2. 주소창 오른쪽 **⋯** 버튼 → **공유** → 아래로 내려서 **홈 화면에 추가**를 눌러요.
+   - iOS 26 기준이에요. 이전 버전은 아래쪽 공유 버튼을 바로 누르면 돼요.
+   - "웹 앱으로 열기(Open as Web App)"가 기본으로 켜져 있어요. 켜진 채로 추가해요.
+   - 이름이 길어서 잘리면 여기서 바꿀 수 있어요.
+3. 홈 화면에 생긴 알 아이콘을 누르면 주소창 없이 앱처럼 열려요.
+4. 휴대폰을 **가로로** 돌려서 플레이해요.
+   - 세로로 들면 "가로로 돌려 주세요" 안내가 떠요.
+   - 화면이 돌아가지 않으면 제어 센터에서 화면 방향 잠금(자물쇠 모양 버튼)을 꺼요.
+
+알아둘 점
+- **배포가 먼저 필요해요.** 아이콘·로그인 유지·회전 안내는 이 변경이 `main`에 합쳐져 Vercel 운영 주소에 배포된 뒤부터 적용돼요.
+- **처음 한 번은 로그인해야 해요.** 홈 화면 앱은 Safari와 저장 공간이 따로라서 그래요. 그다음부터는 앱을 닫았다 열어도 로그인이 유지돼요(웹 브라우저 탭은 기존처럼 탭을 닫으면 로그아웃).
+- **사진·위치는 첫 사용 때 권한을 물어요.** 사진은 "사진 보관함 / 사진 찍기 / 파일 선택" 중에서 고를 수 있어요.
+
+### 네이티브 iOS 앱으로 만들려면 (Capacitor iOS)
+
+안드로이드 앱과 같은 코드로 진짜 iOS 앱을 만들 수 있어요. 방법은 두 가지예요.
+
+| 방법 | 필요한 것 | 설치 방법 | 비고 |
+|---|---|---|---|
+| Mac에서 직접 빌드 | Mac + Xcode 26 이상, 무료 Apple ID | Xcode에서 내 아이폰으로 바로 설치 | 무료 계정은 7일마다 다시 설치해야 해요 |
+| Mac 없이 클라우드 빌드 | Apple Developer Program(연 99달러), GitHub Actions(macOS) | TestFlight 앱으로 설치 | 인증서·프로비저닝 설정이 필요하고, 테스트 빌드는 90일 동안 쓸 수 있어요. 그대로 App Store 출시로 이어져요 |
+
+Mac에서 플랫폼을 추가하는 방법
+```
+npm i @capacitor/ios
+npx cap add ios
+npx cap open ios
+```
+- `ios/App/App/Info.plist`에 권한 설명 문구를 넣어야 해요.
+  - `NSCameraUsageDescription`: 없으면 사진 찍기를 누르는 순간 앱이 꺼져요.
+  - `NSPhotoLibraryUsageDescription`
+  - `NSLocationWhenInUseUsageDescription`
+- Xcode에서 화면 방향을 Landscape만 체크해요.
+- Google Maps 키 웹사이트 제한에 `capacitor://localhost/*`도 추가해요.

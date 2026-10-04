@@ -6,6 +6,7 @@ import { useAuth } from '../router/AuthContext'
 import { reportMissionEvent } from '../utils/missionEvents'
 import { NatureButton, NatureCard, NaturePage, NaturePanel, NatureSectionTitle, NatureTab } from '../components/common/NatureUI'
 import { Leaf, Search, Sprout } from 'lucide-react'
+import { apiUrl } from '../api/base'
 
 // friends.md: 닉네임이 아닌 친구 ID(uid)로 검색. 실시간 대화/선물 없음, 방명록 사용.
 // screen-requirements.md §7: 친구 활동 피드 제거, 대화·선물 버튼 제거.
@@ -29,7 +30,7 @@ export default function Friends() {
   async function loadFriends() {
     if (!user?.uid) return
     try {
-      const response = await fetch(`/api/friends?uid=${encodeURIComponent(user.uid)}`)
+      const response = await fetch(apiUrl(`/api/friends?uid=${encodeURIComponent(user.uid)}`))
       const { friends: list } = await response.json()
       setFriends(list || [])
     } catch {
@@ -40,7 +41,7 @@ export default function Friends() {
   async function loadRequests() {
     if (!user?.uid) return
     try {
-      const response = await fetch(`/api/friends/requests?uid=${encodeURIComponent(user.uid)}`)
+      const response = await fetch(apiUrl(`/api/friends/requests?uid=${encodeURIComponent(user.uid)}`))
       const { requests: list } = await response.json()
       setRequests(list || [])
     } catch {
@@ -64,7 +65,7 @@ export default function Friends() {
       return
     }
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(query)}`)
+      const response = await fetch(apiUrl(`/api/users/${encodeURIComponent(query)}`))
       if (!response.ok) {
         setSearchResult(null)
         return
@@ -79,7 +80,7 @@ export default function Friends() {
   async function sendFriendRequest(targetUid) {
     setSearchMessage('')
     try {
-      const response = await fetch('/api/friends/requests', {
+      const response = await fetch(apiUrl('/api/friends/requests'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requesterUid: user?.uid, targetUid }),
@@ -100,13 +101,13 @@ export default function Friends() {
   }
 
   async function acceptRequest(requestId) {
-    await fetch(`/api/friends/requests/${requestId}/accept`, { method: 'POST' })
+    await fetch(apiUrl(`/api/friends/requests/${requestId}/accept`), { method: 'POST' })
     loadRequests()
     loadFriends()
   }
 
   async function rejectRequest(requestId) {
-    await fetch(`/api/friends/requests/${requestId}/reject`, { method: 'POST' })
+    await fetch(apiUrl(`/api/friends/requests/${requestId}/reject`), { method: 'POST' })
     loadRequests()
   }
 
