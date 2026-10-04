@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { AuthProvider } from './router/AuthContext'
+import { AuthProvider, useAuth } from './router/AuthContext'
 import { CurrencyProvider } from './context/CurrencyContext'
 import { BagProvider } from './context/BagContext'
 import { RegisteredPhotosProvider } from './context/RegisteredPhotosContext'
@@ -13,6 +13,7 @@ import ButtonSoundController from './components/common/ButtonSoundController'
 import SoundAssetPreloader from './components/common/SoundAssetPreloader'
 import LoadingOverlay from './components/common/LoadingOverlay'
 import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandler'
+import RotateDeviceOverlay from './components/common/RotateDeviceOverlay'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
 
@@ -35,6 +36,13 @@ const AiCompanion = lazy(() => import('./pages/AiCompanion'))
 const Quiz = lazy(() => import('./pages/Quiz'))
 const Profile = lazy(() => import('./pages/Profile'))
 
+// 첫 주소(/)는 로그인 상태에 따라 나눈다. 앱(Capacitor)과 홈 화면 웹 앱은 항상 /에서 시작하는데,
+// 로그인을 기기에 유지해도 무조건 /login으로 보내면 열 때마다 로그인 화면이 떠서 유지가 의미 없어진다.
+function RootRedirect() {
+  const { isAuthenticated } = useAuth()
+  return <Navigate to={isAuthenticated ? '/ranch' : '/login'} replace />
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -48,9 +56,10 @@ export default function App() {
       <SoundAssetPreloader />
       <GrowthStageModal />
       <AndroidBackButtonHandler />
+      <RotateDeviceOverlay />
       <Suspense fallback={<LoadingOverlay />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<RootRedirect />} />
         <Route element={<AuthRouteLayout />}>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />

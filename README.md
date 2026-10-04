@@ -4,7 +4,7 @@
 
 **동네에서 만난 곤충을 사진이나 그림으로 기록하면 AI가 이름을 찾아 주고,<br/>나만의 도감과 목장이 함께 자라나는 어린이 생태 탐구 게임**
 
-[▶ 웹에서 플레이](https://little-biologist2.vercel.app) · [📱 안드로이드 앱](#안드로이드-앱) · [📝 개발 기록](docs/devlog/) · [⚙️ 설치·배포 가이드](SETUP.md)
+[▶ 웹에서 플레이](https://little-biologist2.vercel.app) · [📱 폰에서 플레이](#폰에서-플레이하기) · [📝 개발 기록](docs/devlog/) · [⚙️ 설치·배포 가이드](SETUP.md)
 
 <img src="docs/images/login.jpg" alt="리틀 바이올로지스트 시작 화면" width="760" />
 
@@ -69,7 +69,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    W["웹 브라우저"] -->|"화면 + /api, /chat 리라이트"| V["Vercel<br/>React + Vite"]
+    W["웹 브라우저<br/>아이폰 홈 화면 앱"] -->|"화면 + /api, /chat 리라이트"| V["Vercel<br/>React + Vite"]
     V -->|"/api, /chat"| R["Render<br/>Express API 서버"]
     A["안드로이드 앱<br/>Capacitor"] -->|"HTTPS로 직접 호출"| R
     R --> DB[("Supabase<br/>PostgreSQL")]
@@ -81,29 +81,38 @@ flowchart LR
 | 영역 | 사용 기술 |
 |---|---|
 | 프론트엔드 | React 18, Vite 5, React Router 6, Tailwind CSS 3, Framer Motion |
-| 앱 | Capacitor 8 (Android). 웹과 같은 코드를 그대로 사용 |
+| 앱 | Capacitor 8 (Android), 홈 화면 웹 앱(아이폰, 웹 앱 매니페스트). 둘 다 웹과 같은 코드를 그대로 사용 |
 | 백엔드 | Node.js 22, Express 4, Multer, Sharp |
 | 데이터베이스 | Supabase (PostgreSQL) |
 | 외부 API·AI | iNaturalist, OpenAI, Transformers.js(CLIP), Open-Meteo(날씨), Google Maps JavaScript API |
 | 배포·자동화 | Vercel(웹), Render(API 서버), GitHub Actions(안드로이드 APK 빌드) |
 
-## 실행 방법
+## 폰에서 플레이하기
 
-### 웹
+### 아이폰·아이패드: 홈 화면 앱
 
-```bash
-npm install
-cp .env.example .env   # 값 채우기 (SETUP.md 2번 참고)
-npm run dev            # 웹 http://localhost:5173 + API 서버 5174를 함께 실행
-```
+1. **Safari**로 [little-biologist2.vercel.app](https://little-biologist2.vercel.app)을 엽니다.
+2. **공유** 버튼 → **홈 화면에 추가**를 누릅니다. iOS 26부터는 "웹 앱으로 열기"가 기본으로 켜져 있어요.
+3. 홈 화면의 알 아이콘으로 실행하면 주소창 없이 앱처럼 열려요. 휴대폰을 **가로로** 돌려서 플레이하세요.
 
-### 안드로이드 앱
+- 한 번 로그인하면 다음에 열 때도 로그인이 유지돼요.
+- 자세한 방법은 [SETUP.md 8. 아이폰에서 플레이하기](SETUP.md#8-아이폰에서-플레이하기)를 보세요.
+
+### 안드로이드: 앱 설치 (APK)
 
 - **APK 바로 받기**
   1. GitHub의 [Actions → Android 디버그 APK](https://github.com/bobo33772-blip/little-biologist2/actions/workflows/android-apk.yml)에서 가장 최근 실행을 엽니다.
   2. **Artifacts**에서 `app-debug.apk`를 받아 폰에 설치합니다. 폰에서 "출처를 알 수 없는 앱 설치"를 허용해야 해요.
 - **직접 빌드**: Android Studio를 설치한 뒤 `npm install` → `npm run app:android` → ▶ Run.
 - 자세한 방법은 [SETUP.md 7. 안드로이드 앱 빌드](SETUP.md#7-안드로이드-앱-빌드)를 보세요.
+
+## 개발 환경에서 실행하기
+
+```bash
+npm install
+cp .env.example .env   # 값 채우기 (SETUP.md 2번 참고)
+npm run dev            # 웹 http://localhost:5173 + API 서버 5174를 함께 실행
+```
 
 ## 폴더 구조
 
@@ -138,9 +147,10 @@ app.js, styles.css  초기 프로토타입 (현재 서비스 코드는 src/)
 
 - ✅ 웹 서비스 운영 (Vercel + Render + Supabase 무료 플랜)
 - ✅ 안드로이드 앱 1차 전환: 서버 연결, 로그인 유지, 가로 고정, 뒤로가기, APK 자동 빌드 ([기록 001](docs/devlog/001-web-to-android-app.md))
-- ⏳ 앱 다듬기: 카메라로 바로 촬영, 백그라운드 음악 정지, 아이콘·스플래시, 전체화면
+- ✅ 아이폰 홈 화면 앱: 앱 아이콘, 로그인 유지, 세로일 때 회전 안내 ([기록 003](docs/devlog/003-iphone-home-screen-app.md))
+- ⏳ 앱 다듬기: 카메라로 바로 촬영, 백그라운드 음악 정지, 안드로이드 아이콘·스플래시, 전체화면
 - ⏳ 스토어 출시 준비: 회원 탈퇴, 개인정보처리방침, 방명록·AI 답변 신고, API 인증 강화
-- ⏳ iOS 앱 (Mac과 Xcode 필요)
+- ⏳ iOS 네이티브 앱 (Mac과 Xcode 필요, 또는 Apple 개발자 프로그램 + TestFlight)
 
 ## 개발 메모: 에셋
 

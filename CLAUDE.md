@@ -10,7 +10,7 @@
 - **서버**: Express (`server/`), Render에 배포.
   - DB: Supabase(PostgreSQL)
   - 외부 연동: iNaturalist(사진 판별), OpenAI(AI 말벗), CLIP(그림 판별)
-- **앱**: Capacitor 8로 같은 웹 코드를 감싼 Android 앱 (`android/`).
+- **앱**: Capacitor 8로 같은 웹 코드를 감싼 Android 앱 (`android/`). 아이폰은 홈 화면 웹 앱(`public/manifest.webmanifest`)으로 플레이.
 - **배포·운영 메모**: [SETUP.md](SETUP.md).
 
 ## 자주 쓰는 명령
@@ -27,8 +27,10 @@
 - 사용자와의 대화, 문서, 코드 주석은 한국어로 쓴다.
 - 서버 호출은 항상 `apiUrl()`(`src/api/base.js`)로 감싼다.
   - `fetch('/api/...')`처럼 상대 경로를 바로 쓰면 앱(Capacitor)에서는 서버에 닿지 않는다.
-- 앱에서만 달라야 하는 동작은 `src/utils/platform.js`의 `isNativeApp` / `nativePlatform`으로 분기한다.
-  - 기본 원칙은 **웹 동작을 바꾸지 않는 것**이다.
+- 앱에서만 달라야 하는 동작은 `src/utils/platform.js`로 분기한다.
+  - Capacitor 앱은 `isNativeApp` / `nativePlatform`, 홈 화면 웹 앱은 `isStandaloneWebApp`을 쓴다.
+  - 기본 원칙은 **웹 동작(브라우저 탭)을 바꾸지 않는 것**이다.
+- 앱과 홈 화면 웹 앱은 첫 주소 `/`에서 시작한다. 시작 흐름을 검증할 때는 `/ranch`를 바로 열지 말고 반드시 `/`부터 확인한다.
 - 생성 파일은 커밋하지 않는다.
   - 예: `android/app/src/main/assets/public` (`cap sync`가 만든다)
   - `.env` 같은 비밀 값도 커밋하지 않는다.

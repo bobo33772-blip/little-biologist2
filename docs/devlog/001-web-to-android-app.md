@@ -118,7 +118,7 @@
 | 웹 빌드·린트 | `vite build`, `eslint src server` | 통과. 메인 번들 +9.5KB(gzip +3.3KB, `@capacitor/core`) |
 | 단계별 커밋 독립성 | 1단계 커밋만 따로 체크아웃해 빌드·린트 | 통과 |
 | 앱 환경 서버 주소 | Playwright에서 `window.androidBridge`를 흉내 내 앱 모드로 실행 | 로그인·진행도·출석 요청이 모두 `https://little-biologist2.onrender.com`으로 감 |
-| 앱 로그인 유지 | 로그인 → 새 탭(앱 재시작과 같은 상황) | `localStorage`에 저장되고 목장으로 바로 진입. 출석 체크 호출 확인 |
+| 앱 로그인 유지 | 로그인 → 새 탭에서 `/ranch` 열기 | `localStorage`에 저장되고 목장으로 바로 진입. 출석 체크 호출 확인. ⚠️ 정정: 실제 앱은 `/`에서 시작하는데 `/`는 항상 로그인 화면으로 보냈다. 그래서 앱을 열 때마다 로그인 화면이 떴다. [003](003-iphone-home-screen-app.md)에서 찾아 수정했다. |
 | 웹 회귀 | 같은 시나리오를 웹 모드로 실행 | 상대 경로 + `sessionStorage` 그대로, 새 탭에서는 로그인 화면(기존과 동일) |
 | 뒤로가기 | 네이티브 브리지(`nativeCallback`)를 흉내 내 실제와 같은 경로로 이벤트 전달 | 목장 토스트 → 두 번째에 종료, 상점→목장, 기록 없는 화면→목장, 회원가입→로그인. 페이지 오류 0건 |
 | 한글 파일 이름 | 빌드 결과물 중 한글·공백이 들어간 파일 이름 177개 | Capacitor 로컬 서버가 `Uri.getPath()`(디코딩된 경로)로 파일을 찾는 것을 소스에서 확인 |
@@ -142,7 +142,7 @@
   - AI 답변 신고
   - 진행도 API 인증(지금은 uid만 알면 진행도를 바꿀 수 있음)
   - 아동 대상 정책 검토. [Google Play 가족 정책](https://support.google.com/googleplay/android-developer/answer/11043825)은 아동 대상 앱의 정밀 위치 수집을 금지한다. 출시할 때는 `ACCESS_FINE_LOCATION`을 빼고 대략적 위치만 쓰는 방향을 검토한다. 날씨·지도는 동네 수준이면 충분하다.
-- [ ] **iOS**: Mac + Xcode 26 이상이 필요하다.
+- [ ] **iOS**: 네이티브 앱은 Mac + Xcode 26 이상이 필요하다. 우선 홈 화면 웹 앱으로 아이폰에서 플레이할 수 있게 했다([003](003-iphone-home-screen-app.md)).
 
 ## 7. 포트폴리오 포인트
 

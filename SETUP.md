@@ -182,18 +182,45 @@ npm run app:android
     - `android/app/build.gradle`의 `namespace`·`applicationId`
     - `MainActivity.java`의 패키지 경로
 
-### 아이폰(iOS)을 만들려면
+## 8. 아이폰에서 플레이하기
 
-- Mac과 Xcode 26 이상이 꼭 필요해요. Windows만으로는 빌드할 수 없어요.
-- 플랫폼 추가 명령은 아래와 같아요.
-  ```
-  npm i @capacitor/ios
-  npx cap add ios
-  npx cap open ios
-  ```
+iOS 앱을 빌드하려면 Mac과 Xcode가 필요해요. 그래서 아이폰은 먼저 **홈 화면 웹 앱**으로 플레이해요.
+왜 이렇게 정했는지는 [개발 기록 003](docs/devlog/003-iphone-home-screen-app.md)에 있어요.
+
+### 홈 화면 앱으로 설치하기 (무료, Mac 불필요)
+
+1. 아이폰 **Safari**로 운영 주소 `https://little-biologist2.vercel.app`을 열어요.
+2. **공유** 버튼 → **홈 화면에 추가**를 눌러요.
+   - iOS 26부터는 "웹 앱으로 열기"가 기본으로 켜져 있어요.
+   - 이름이 길어서 잘리면 여기서 바꿀 수 있어요.
+3. 홈 화면에 생긴 알 아이콘을 누르면 주소창 없이 앱처럼 열려요.
+4. 휴대폰을 **가로로** 돌려서 플레이해요.
+   - 세로로 들면 "가로로 돌려 주세요" 안내가 떠요.
+   - 화면이 돌아가지 않으면 제어 센터에서 화면 방향 잠금(자물쇠 모양 버튼)을 꺼요.
+
+알아둘 점
+- **배포가 먼저 필요해요.** 아이콘·로그인 유지·회전 안내는 이 변경이 `main`에 합쳐져 Vercel 운영 주소에 배포된 뒤부터 적용돼요.
+- **처음 한 번은 로그인해야 해요.** 홈 화면 앱은 Safari와 저장 공간이 따로라서 그래요. 그다음부터는 앱을 닫았다 열어도 로그인이 유지돼요(웹 브라우저 탭은 기존처럼 탭을 닫으면 로그아웃).
+- **사진·위치는 첫 사용 때 권한을 물어요.** 사진은 "사진 보관함 / 사진 찍기 / 파일 선택" 중에서 고를 수 있어요.
+
+### 네이티브 iOS 앱으로 만들려면 (Capacitor iOS)
+
+안드로이드 앱과 같은 코드로 진짜 iOS 앱을 만들 수 있어요. 방법은 두 가지예요.
+
+| 방법 | 필요한 것 | 설치 방법 | 비고 |
+|---|---|---|---|
+| Mac에서 직접 빌드 | Mac + Xcode 26 이상, 무료 Apple ID | Xcode에서 내 아이폰으로 바로 설치 | 무료 계정은 7일마다 다시 설치해야 해요 |
+| Mac 없이 클라우드 빌드 | Apple Developer Program(연 99달러), GitHub Actions(macOS) | TestFlight 앱으로 설치 | 인증서·프로비저닝 설정이 필요하고, 테스트 빌드는 90일 동안 쓸 수 있어요. 그대로 App Store 출시로 이어져요 |
+
+Mac에서 플랫폼을 추가하는 방법
+```
+npm i @capacitor/ios
+npx cap add ios
+npx cap open ios
+```
 - `ios/App/App/Info.plist`에 권한 설명 문구를 넣어야 해요.
   - `NSCameraUsageDescription`: 없으면 사진 찍기를 누르는 순간 앱이 꺼져요.
   - `NSPhotoLibraryUsageDescription`
   - `NSLocationWhenInUseUsageDescription`
 - Xcode에서 화면 방향을 Landscape만 체크해요.
-- 무료 Apple ID로도 내 아이폰에 설치할 수 있지만, 7일마다 다시 설치해야 해요.
+- Google Maps 키 웹사이트 제한에 `capacitor://localhost/*`도 추가해요.
