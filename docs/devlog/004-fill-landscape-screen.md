@@ -5,7 +5,7 @@
 - 계기
   - 사용자가 아이폰 홈 화면 웹 앱([003](003-iphone-home-screen-app.md))을 가로로 돌려 플레이했다.
   - "옆 화면 여백이 너무 신경 쓰인다. 폰 화면 비율에 맞춰 여백 없이 자연스럽게 맞춰 달라"고 요청했다.
-- 관련 커밋: (커밋 후 채움)
+- 관련 커밋: `83fbf1e` feat(ui): fill the phone landscape screen edge to edge
 
 ## 1. 배경
 
