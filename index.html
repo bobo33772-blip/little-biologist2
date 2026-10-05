@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌿</text></svg>" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: 아이폰 가로 화면에서 노치 양옆을 빈 띠로 비워 두지 않고 화면 끝까지 그린다.
+         대신 눌러야 하는 UI는 src/index.css의 --safe-* 값만큼 안쪽으로 둔다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="동네 곤충을 사진·그림으로 기록하면 AI가 찾아 주고, 도감과 목장이 함께 자라는 어린이 생태 탐구 게임" />
     <!-- 홈 화면에 추가(아이폰 Safari) / 앱 설치(안드로이드 Chrome)했을 때 앱처럼 열리게 하는 설정 -->
     <link rel="manifest" href="/manifest.webmanifest" />

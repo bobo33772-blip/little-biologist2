@@ -104,7 +104,7 @@ export default function FriendRanch() {
         )}
 
         {/* 상단: 친구 프로필 (내 목장의 프로필 카드와 같은 모양 — 아바타 + 닉네임 + 성장 포인트 바) */}
-        <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex items-start justify-between gap-3">
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-20 ml-[var(--safe-left)] mr-[var(--safe-right)] mt-[var(--safe-top)] flex items-start justify-between gap-3">
           <div className="ranch-profile-cluster pointer-events-auto">
             <button
               type="button"
@@ -132,14 +132,14 @@ export default function FriendRanch() {
         </div>
 
         {/* 우측 상단: 방명록 버튼 — 내 목장의 편집/방명록 버튼과 같은 위치·모양(아이콘 전용). */}
-        <div className="absolute right-1 top-[9rem] z-50 flex flex-col items-end">
+        <div className="absolute right-1 top-[9rem] z-50 mr-[var(--safe-right)] mt-[var(--safe-top)] flex flex-col items-end">
           <button type="button" onClick={openGuestbook} className="ranch-edit-button">
             <img className="ranch-action-button__image ranch-action-button__image--guestbook" src="/ui/guestbook-action.png" alt="방명록 보기" />
           </button>
         </div>
 
         {/* 하단 좌측: 내 목장의 도감/탐험/소셜... 바로가기 대신 뒤로가기 + 친구 도감 구경하기만 둔다. */}
-        <div className="absolute bottom-6 left-4 z-20 flex flex-col gap-2">
+        <div className="absolute bottom-6 left-4 z-20 mb-[var(--safe-bottom)] ml-[var(--safe-left)] flex flex-col gap-2">
           <button
             type="button"
             onClick={() => navigate('/friends')}

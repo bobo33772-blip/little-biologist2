@@ -449,8 +449,9 @@ export default function Ranch() {
 
         {!isEditing && !isEntryModalActive && (
           <>
-            {/* 상단: 탐험가 프로필(닉네임 옆에 대표 칭호·배지) + 알림/설정 (목장 이미지 위 오버레이) */}
-            <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex items-start justify-between gap-3">
+            {/* 상단: 탐험가 프로필(닉네임 옆에 대표 칭호·배지) + 알림/설정 (목장 이미지 위 오버레이)
+                목장 배경은 화면 끝까지 그리고, 가장자리 UI는 m*-[var(--safe-*)]로 노치·홈 바만큼 더 안쪽에 둔다(index.css :root 참고). */}
+            <div className="pointer-events-none absolute inset-x-3 top-3 z-20 ml-[var(--safe-left)] mr-[var(--safe-right)] mt-[var(--safe-top)] flex items-start justify-between gap-3">
               <div className="ranch-profile-cluster pointer-events-auto">
                 <button
                   type="button"
@@ -515,7 +516,7 @@ export default function Ranch() {
             </div>
 
             {/* 현재 위치 기반 날씨 표시 — 편집 버튼(우측 상단) 바로 아래에 둔다. */}
-            <div className="pointer-events-none absolute right-0 top-20 z-20 overflow-visible">
+            <div className="pointer-events-none absolute right-0 top-20 z-20 mr-[var(--safe-right)] mt-[var(--safe-top)] overflow-visible">
               <WeatherBadge
                 weather={weather}
                 visible={isWeatherVisible}
@@ -527,7 +528,7 @@ export default function Ranch() {
 
         {/* 가방에서 "목장에 배치"로 들어온 경우: 가방 인테리어를 바로 꺼내 놓을 수 있는 트레이. */}
         {isEditing && !isEntryModalActive && viaPlacementEntry && (
-          <div className="absolute left-3 top-3 flex w-64 max-w-[72vw] flex-col gap-2 rounded-xl bg-white/95 p-4 shadow-card backdrop-blur-sm">
+          <div className="absolute left-3 top-3 ml-[var(--safe-left)] mt-[var(--safe-top)] flex w-64 max-w-[72vw] flex-col gap-2 rounded-xl bg-white/95 p-4 shadow-card backdrop-blur-sm">
             <div className="mb-1 flex items-center justify-between">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
                 <img className="h-8 w-8 scale-125 object-contain" src="/ui/bag-trimmed.png" alt="" aria-hidden="true" />
@@ -574,7 +575,7 @@ export default function Ranch() {
         )}
 
         {/* 우측 상단: 편집 버튼 — 편집 중에도 계속 필요해서 항상 남긴다 */}
-        <div className={`absolute right-1 top-[9rem] z-50 flex flex-col items-end gap-[-2.25rem] transition-opacity ${isEntryModalActive || isEditing ? 'pointer-events-none opacity-0' : ''}`}>
+        <div className={`absolute right-1 top-[9rem] z-50 mr-[var(--safe-right)] mt-[var(--safe-top)] flex flex-col items-end gap-[-2.25rem] transition-opacity ${isEntryModalActive || isEditing ? 'pointer-events-none opacity-0' : ''}`}>
           <button
             type="button"
             onClick={() => {

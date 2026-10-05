@@ -23,7 +23,7 @@ export default function FocusedLayout({ title, icon, iconSrc, actions, backTo, b
         />
       )}
       <AppHeader leftSlot={<RanchBackButton to={backTo} label={backLabel} />} />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 pb-[calc(1.5rem+var(--safe-bottom))] pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))] pt-6">
         <div className={backgroundImage ? 'rounded-3xl bg-white/72 p-4 shadow-soft backdrop-blur-[2px] sm:p-5' : ''}>
           {title && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

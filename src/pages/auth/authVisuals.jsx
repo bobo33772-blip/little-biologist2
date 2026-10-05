@@ -5,8 +5,8 @@ export const BACKGROUND_SRC = '/images/login/로그인.png'
 // logo.png는 실제 글자/캐릭터가 위쪽 40%에만 있고 아래 60%가 빈 여백이라
 // 그대로 쓰면 작아 보인다. 콘텐츠 영역만 잘라낸 버전을 사용한다.
 export const LOGO_SRC = '/images/login/logo-cropped.png'
-// 배경 원본 픽셀 비율(1672x941). background-size:contain이 실제로 그림을
-// 화면 안 어디에 얼마나 그릴지 계산하려면 이 비율이 필요하다.
+// 배경 원본 픽셀 비율(1672x941). 배경을 화면 폭에 맞춰 그렸을 때 그림이 실제로
+// 화면 안 어디에 얼마나 보일지 계산하려면 이 비율이 필요하다.
 const BACKGROUND_ASPECT = 1672 / 941
 
 export const DESIGN_WIDTH = 440
@@ -16,18 +16,32 @@ export const DESIGN_WIDTH = 440
 export const DESIGN_HEIGHT = 660
 export const SHIFT_RATIO = 0.1 // 카드를 오른쪽으로 살짝 밀어 왼쪽 알 캐릭터를 가리지 않게 함
 
+// 노치·홈 바(안전 영역) 폭을 px 숫자로 읽는다. index.css의 --safe-* 값은 env()가 섞여 있어
+// JS에서 바로 숫자로 읽을 수 없으므로, 보이지 않는 요소에 padding으로 걸고 계산된 값을 읽는다.
+function readSafeArea() {
+  const probe = document.createElement('div')
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;pointer-events:none;padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left)'
+  document.body.appendChild(probe)
+  const style = window.getComputedStyle(probe)
+  const insets = {
+    top: parseFloat(style.paddingTop) || 0,
+    right: parseFloat(style.paddingRight) || 0,
+    bottom: parseFloat(style.paddingBottom) || 0,
+    left: parseFloat(style.paddingLeft) || 0,
+  }
+  probe.remove()
+  return insets
+}
+
 function computeScale({ designWidth, designHeight, marginRatio, shiftRatio, maxScale }) {
   if (typeof window === 'undefined') return 1
-  const viewportAspect = window.innerWidth / window.innerHeight
-  let pictureWidth
-  let pictureHeight
-  if (viewportAspect > BACKGROUND_ASPECT) {
-    pictureHeight = window.innerHeight
-    pictureWidth = pictureHeight * BACKGROUND_ASPECT
-  } else {
-    pictureWidth = window.innerWidth
-    pictureHeight = pictureWidth / BACKGROUND_ASPECT
-  }
+  const safe = readSafeArea()
+  // 배경은 항상 화면 폭에 맞춰 그린다(AuthScreen의 background-size: 100% auto).
+  // 그래서 그림이 보이는 폭은 화면 폭 전체이고, 높이는 화면 높이와 "폭에 맞춘 그림 높이" 중 작은 쪽이다.
+  // 여기서 노치·홈 바 폭을 빼서 카드가 그 밑에 깔리지 않게 한다.
+  const pictureWidth = window.innerWidth - safe.left - safe.right
+  const pictureHeight = Math.min(window.innerHeight - safe.top - safe.bottom, window.innerWidth / BACKGROUND_ASPECT)
 
   // 오른쪽으로 밀린 만큼 오른쪽 여유 공간이 더 필요하므로, 카드 중심에서
   // 가장 먼 쪽(오른쪽) 기준으로 폭 제약을 계산한다.
@@ -38,9 +52,9 @@ function computeScale({ designWidth, designHeight, marginRatio, shiftRatio, maxS
   return Math.min(maxScale, scaleByWidth, scaleByHeight)
 }
 
-// 배경 사진은 background-size:contain이라 화면 비율에 따라 실제로는 화면보다
-// 작게(레터박스 있는) 그려질 수 있다. window 전체 크기가 아니라 "사진이 실제로
-// 차지하는 영역" 안에서 배율을 계산해야 로그인/가입창이 사진 밖으로 넘어가지 않는다.
+// 배경 사진은 화면 폭에 맞춰 그리므로 화면이 그림보다 세로로 길면(태블릿·세로 화면) 위아래에
+// 빈 공간이 생긴다. window 전체 크기가 아니라 "사진이 실제로 보이는 영역" 안에서 배율을
+// 계산해야 로그인/가입창이 사진 밖으로 넘어가지 않는다.
 // 최초 렌더부터 정확한 배율로 그려야(지연 초기화) 마운트 시 "확 커졌다 줄어드는"
 // 깜빡임이 생기지 않는다.
 export function useUniformScale({ designWidth, designHeight, marginRatio = 0.96, shiftRatio = 0, maxScale = 1.7 }) {
@@ -96,12 +110,16 @@ export function AuthScreen({ children }) {
 
   return (
     <div
-      className="relative flex h-[100dvh] w-screen items-center justify-center overflow-hidden"
+      // padding(안전 영역)만큼 안쪽에서 카드를 가운데 정렬해 노치·홈 바를 피한다.
+      // 배경은 padding까지 포함한 화면 전체에 그려진다.
+      className="relative flex h-[100dvh] w-screen items-center justify-center overflow-hidden pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)] pt-[var(--safe-top)]"
       style={{
-        // 사진(contain)을 하늘/풀밭 톤 그라디언트 위에 얹어, 화면 비율이 달라져도
-        // 잘리거나 사라지지 않고 항상 전체 그림이 같은 비율로 보이게 고정한다.
+        // 사진을 화면 폭에 맞춰(100% auto) 하늘/풀밭 톤 그라디언트 위에 얹는다.
+        // 폰 가로 화면처럼 화면이 그림보다 가로로 길면 위아래가 조금 잘리는 대신 양옆 빈 띠 없이
+        // 화면을 꽉 채우고, 태블릿·세로 화면처럼 세로로 길면 예전(contain)처럼 그림 전체가 보이고
+        // 위아래만 그라디언트가 채운다. 어느 경우든 그림의 왼쪽(알 캐릭터)~오른쪽 끝은 잘리지 않는다.
         backgroundImage: `url('${BACKGROUND_SRC}'), linear-gradient(to bottom, #BFE3F5, #DCEFC7)`,
-        backgroundSize: 'contain, cover',
+        backgroundSize: '100% auto, cover',
         backgroundPosition: 'center, center',
         backgroundRepeat: 'no-repeat, no-repeat',
       }}

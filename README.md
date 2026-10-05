@@ -148,6 +148,7 @@ app.js, styles.css  초기 프로토타입 (현재 서비스 코드는 src/)
 - ✅ 웹 서비스 운영 (Vercel + Render + Supabase 무료 플랜)
 - ✅ 안드로이드 앱 1차 전환: 서버 연결, 로그인 유지, 가로 고정, 뒤로가기, APK 자동 빌드 ([기록 001](docs/devlog/001-web-to-android-app.md))
 - ✅ 아이폰 홈 화면 앱: 앱 아이콘, 로그인 유지, 세로일 때 회전 안내 ([기록 003](docs/devlog/003-iphone-home-screen-app.md))
+- ✅ 폰 가로 화면 꽉 채우기: 노치 양옆 빈 띠 없이 화면 끝까지, 버튼은 노치·홈 바 안쪽 ([기록 004](docs/devlog/004-fill-landscape-screen.md))
 - ⏳ 앱 다듬기: 카메라로 바로 촬영, 백그라운드 음악 정지, 안드로이드 아이콘·스플래시, 전체화면
 - ⏳ 스토어 출시 준비: 회원 탈퇴, 개인정보처리방침, 방명록·AI 답변 신고, API 인증 강화
 - ⏸️ iOS 네이티브 앱: 보류. 개발 환경이 Windows라 홈 화면 웹 앱으로 대신하고, 스토어 출시가 필요해지면 개발자 프로그램 + TestFlight로 다시 검토 ([기록 003](docs/devlog/003-iphone-home-screen-app.md))

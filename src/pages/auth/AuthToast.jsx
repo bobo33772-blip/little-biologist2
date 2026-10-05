@@ -4,7 +4,7 @@ export default function AuthToast({ type = 'error', message }) {
   const isInfo = type === 'info'
 
   return (
-    <div className="pointer-events-none fixed inset-x-4 top-4 z-50 flex justify-center">
+    <div className="pointer-events-none fixed inset-x-4 top-4 z-50 mt-[var(--safe-top)] flex justify-center">
       <div
         className={`pointer-events-auto min-w-[18rem] max-w-md rounded-[1.35rem] border px-6 py-4 text-center font-['Jua'] text-base shadow-[0_12px_28px_rgba(35,60,20,0.24)] backdrop-blur-md ${
           isInfo

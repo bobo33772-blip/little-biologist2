@@ -500,7 +500,7 @@ export default function Profile() {
       </div>
     </FocusedLayout>
     {isEditMode && visibleEditTab === 'profile' && (
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ivory-200 bg-white/95 px-4 py-3 shadow-[0_-6px_16px_rgba(0,0,0,0.1)] backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ivory-200 bg-white/95 pb-[calc(0.75rem+var(--safe-bottom))] pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))] pt-3 shadow-[0_-6px_16px_rgba(0,0,0,0.1)] backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
           <span className="text-xs font-semibold text-ink-700/60">
             {hasUnsavedProfileChanges ? '저장하지 않은 변경사항이 있어요.' : showSavedToast ? '저장했어요.' : '변경사항 없음'}

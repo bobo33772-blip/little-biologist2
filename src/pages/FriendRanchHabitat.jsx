@@ -302,8 +302,8 @@ export default function FriendRanchHabitat() {
           </div>
         </RanchCamera>
 
-        <div className="pointer-events-none relative z-10 flex min-h-screen flex-col">
-          <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="pointer-events-none relative z-10 flex min-h-screen flex-col pt-[var(--safe-top)]">
+          <div className="pointer-events-auto flex flex-wrap items-center justify-between gap-3 py-4 pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))]">
             <button
               type="button"
               onClick={(event) => {
@@ -349,7 +349,7 @@ export default function FriendRanchHabitat() {
             </div>
           </div>
 
-          <div className="relative flex flex-1 flex-col justify-end px-4 pb-6">
+          <div className="relative flex flex-1 flex-col justify-end pb-[calc(1.5rem+var(--safe-bottom))] pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))]">
             <div
               className="pointer-events-auto max-h-[62vh] max-w-3xl overflow-y-auto rounded-2xl border border-white/12 bg-black/35 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-md"
               style={{ transform: 'scale(min(1, calc(100vh / 700px)))', transformOrigin: 'bottom left' }}
