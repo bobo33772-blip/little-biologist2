@@ -5,7 +5,7 @@
 - 계기
   - 사용자가 아이폰 홈 화면 앱의 가로 화면 스크린샷을 보내며 "잘 맞춰 달라"고 요청했다.
   - [004](004-fill-landscape-screen.md)는 아직 main에 합치기 전이라, 스크린샷은 수정 전 화면이다.
-- 관련 커밋: (커밋 후 채움)
+- 관련 커밋: `787f43e` fix(ios): undo the shift after rotating the home screen app to landscape
 
 ## 1. 배경
 
