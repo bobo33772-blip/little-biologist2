@@ -14,3 +14,6 @@ export const isStandaloneWebApp =
   !isNativeApp &&
   typeof window !== 'undefined' &&
   (window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches === true)
+
+// 그중 아이폰·아이패드 Safari의 "홈 화면에 추가"로 연 웹 앱. iOS에만 있는 버그를 피할 때 쓴다.
+export const isIosHomeScreenApp = !isNativeApp && typeof window !== 'undefined' && window.navigator.standalone === true

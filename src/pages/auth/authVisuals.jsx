@@ -63,15 +63,26 @@ export function useUniformScale({ designWidth, designHeight, marginRatio = 0.96,
   )
 
   useEffect(() => {
+    const timers = new Set()
     function update() {
       setScale(computeScale({ designWidth, designHeight, marginRatio, shiftRatio, maxScale }))
     }
+    // 아이폰은 회전 직후 화면 크기·안전 영역 값이 조금 늦게 바뀌는 경우가 있어 잠시 뒤 한 번 더 계산한다.
+    function updateAfterRotation() {
+      update()
+      const id = window.setTimeout(() => {
+        timers.delete(id)
+        update()
+      }, 500)
+      timers.add(id)
+    }
     update()
     window.addEventListener('resize', update)
-    window.addEventListener('orientationchange', update)
+    window.addEventListener('orientationchange', updateAfterRotation)
     return () => {
       window.removeEventListener('resize', update)
-      window.removeEventListener('orientationchange', update)
+      window.removeEventListener('orientationchange', updateAfterRotation)
+      timers.forEach((id) => window.clearTimeout(id))
     }
   }, [designWidth, designHeight, marginRatio, shiftRatio, maxScale])
 

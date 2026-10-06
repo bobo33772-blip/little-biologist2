@@ -19,6 +19,15 @@ html, body, #root {
   --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 
+/* 아이폰은 가로로 들면 상태 바를 숨기므로 위쪽 안전 영역이 0이어야 한다. 그런데 홈 화면 앱을 세로로 열었다가
+   돌리면 iOS가 세로 때 값(상태 바 높이)을 남겨 두는 경우가 있어서, 가로 폰에서는 위쪽 값을 쓰지 않는다.
+   ios-home-screen-app 표시는 StandaloneViewportFix가 아이폰 홈 화면 앱에서만 붙인다. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root.ios-home-screen-app {
+    --safe-top: 0px;
+  }
+}
+
 body {
   @apply bg-ivory-100 text-ink-900;
 }

@@ -14,6 +14,7 @@ import SoundAssetPreloader from './components/common/SoundAssetPreloader'
 import LoadingOverlay from './components/common/LoadingOverlay'
 import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandler'
 import RotateDeviceOverlay from './components/common/RotateDeviceOverlay'
+import StandaloneViewportFix from './components/common/StandaloneViewportFix'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
 
@@ -57,6 +58,7 @@ export default function App() {
       <GrowthStageModal />
       <AndroidBackButtonHandler />
       <RotateDeviceOverlay />
+      <StandaloneViewportFix />
       <Suspense fallback={<LoadingOverlay />}>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
