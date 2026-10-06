@@ -16,7 +16,7 @@ export default function AppHeader({ leftSlot }) {
   const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false)
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-ivory-200 bg-ivory-50/90 px-4 py-3 backdrop-blur">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-ivory-200 bg-ivory-50/90 pb-3 pl-[calc(1rem+var(--safe-left))] pr-[calc(1rem+var(--safe-right))] pt-[calc(0.75rem+var(--safe-top))] backdrop-blur">
       <div className="flex items-center gap-3">
         {leftSlot}
         <button

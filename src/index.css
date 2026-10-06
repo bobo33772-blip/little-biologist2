@@ -6,6 +6,28 @@ html, body, #root {
   height: 100%;
 }
 
+/* 안전 영역: 노치·다이내믹 아일랜드·둥근 모서리·홈 바에 가려질 수 있는 화면 가장자리 폭.
+   index.html의 viewport-fit=cover로 화면을 끝까지 쓰므로, 배경은 끝까지 그리고 눌러야 하는
+   UI만 이 값만큼 안쪽으로 들인다. 노치가 없는 기기와 데스크톱에서는 모두 0이라 달라지는 게 없다.
+   안드로이드 앱(Capacitor)은 WebView 버전에 따라 env() 값이 틀릴 수 있어서 Capacitor가
+   <html>에 직접 넣어 주는 --safe-area-inset-* 값을 먼저 쓰고, 없으면 env()를 쓴다.
+   absolute로 가장자리에 붙인 UI는 원래 위치값(left/top...)은 그대로 두고 margin으로 이 값만큼 더 민다. */
+:root {
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+
+/* 아이폰은 가로로 들면 상태 바를 숨기므로 위쪽 안전 영역이 0이어야 한다. 그런데 홈 화면 앱을 세로로 열었다가
+   돌리면 iOS가 세로 때 값(상태 바 높이)을 남겨 두는 경우가 있어서, 가로 폰에서는 위쪽 값을 쓰지 않는다.
+   ios-home-screen-app 표시는 StandaloneViewportFix가 아이폰 홈 화면 앱에서만 붙인다. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root.ios-home-screen-app {
+    --safe-top: 0px;
+  }
+}
+
 body {
   @apply bg-ivory-100 text-ink-900;
 }
@@ -5442,4 +5464,21 @@ body {
 .ranch-top-icon-button[aria-label="설정"] img {
   width: 62px !important;
   height: 62px !important;
+}
+
+/* 안전 영역 피하기(목장 화면 가장자리 UI). 이 파일 앞쪽에는 같은 클래스 규칙이 화면 크기별로
+   여러 번 나오므로, 위치값(left/right/bottom)은 그 규칙들에 그대로 맡기고 맨 끝에서 margin으로
+   안전 영역만큼만 더 민다. 노치·홈 바가 없는 화면에서는 margin이 0이라 위치가 바뀌지 않는다. */
+.ranch-egg-help {
+  margin-left: var(--safe-left);
+}
+
+.ranch-edit-complete-button {
+  margin-top: var(--safe-top);
+  margin-right: var(--safe-right);
+}
+
+.ranch-side-hud {
+  margin-bottom: var(--safe-bottom);
+  max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right)) !important;
 }
