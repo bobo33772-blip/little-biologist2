@@ -8,7 +8,7 @@
 - 관련 커밋
   - `e7fa096` perf(scene): remove jank before adding transitions (stage A)
   - `8ba0c6a` feat(scene): game-like scene transitions and popup entrances (stage B)
-  - `(커밋 후 채움)` fix(scene): review fixes for scene transitions (stage C)
+  - `d3f1d74` fix(scene): review fixes for scene transitions (stage C)
 
 ## 1. 배경
 
@@ -93,7 +93,7 @@
   - 튜토리얼을 다시 시작해도 확대된 목장 카메라가 그대로 남던 문제
   - 높이 393px 가로 폰에서 튜토리얼 환영 말풍선과 첫 알 안내창의 버튼이 잘리던 문제
 
-### 3-3. 리뷰 반영 (이번 커밋)
+### 3-3. 리뷰 반영 (`d3f1d74`)
 
 2단계 뒤 독립 리뷰에서 확인된 문제와 실측에서 남은 문제를 고쳤다.
 
@@ -118,7 +118,7 @@
 - Playwright(Chromium 141)로 폰 가로 852×393(배율 2) 홈 화면 앱을 흉내 냈다.
 - 측정용 HTTP/2 프록시를 두었다. 하는 일은 API 가짜 응답, 텍스트 gzip, 회선 흉내(느린 1.6Mbps·150ms, 보통 10Mbps·40ms)다.
   - Playwright의 요청 가로채기를 켜면 HTTP 캐시가 꺼져 두 번째 방문을 잴 수 없어서 프록시를 썼다.
-- 같은 시나리오를 네 빌드에 똑같이 돌렸다: 변경 전(`d2f1f64`), 1단계(`e7fa096`), 2단계(`8ba0c6a`), 최종(이번 커밋).
+- 같은 시나리오를 네 빌드에 똑같이 돌렸다: 변경 전(`d2f1f64`), 1단계(`e7fa096`), 2단계(`8ba0c6a`), 최종(`d3f1d74`).
 - 화면 상태는 매 프레임(rAF) 기록했다. 스크린캐스트 프레임의 픽셀로 빈 화면과 어두운 화면도 교차 확인했다.
 - 최종 열 출처: 전체 측정 1회. 다만 도감 미리받기를 마지막에 고쳐서, 도감 첫 진입(S3) 값은 그 뒤에 다시 잰 값이다(관련 시나리오만 다시 측정).
 
