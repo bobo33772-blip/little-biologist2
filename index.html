@@ -24,10 +24,13 @@
          쓰므로 모양은 여기 한 곳에서만 정한다. html·body 배경은 칠하지 않는다 — 칠하면 아이폰 가로
          화면(viewport-fit=cover)의 노치·안전 영역 색이 바뀐다(docs/devlog 004·005). -->
     <style>
+      /* z-index 115: 로딩 장면은 튜토리얼 말풍선·타깃(z-110)과 팝업(z-100)보다 위, 장소 전환 원형 커튼
+         (.lb-scene-curtain, z-120)과 가로 돌리기 안내(z-2000)보다 아래. 화면 JS를 기다리는 동안 튜토리얼
+         카드가 로딩 장면 위로 비쳐 보이던 것을 막는다. */
       .lb-boot {
         position: fixed;
         inset: 0;
-        z-index: 80;
+        z-index: 115;
         display: grid;
         place-content: center;
         justify-items: center;
@@ -122,13 +125,21 @@
       }
     </style>
     <script>
-      // 첫 화면 그림 1장을 JS보다 먼저 받기 시작한다. 로그인 정보가 남아 있으면(AuthContext.jsx의
-      // STORAGE_KEY, 앱·홈 화면 앱은 localStorage, 브라우저 탭은 sessionStorage) 목장 배경, 아니면
+      // 첫 화면 그림 1장을 JS보다 먼저 받기 시작한다. 로그인 정보가 남아 있으면 목장 배경, 아니면
       // 로그인 배경. 다른 요청과 다투지 않게 fetchpriority는 주지 않는다.
+      // 저장소는 AuthContext.jsx(authStorage)와 똑같이 고른다 — 앱(Capacitor)·홈 화면 웹 앱은 localStorage,
+      // 브라우저 탭은 sessionStorage. 둘 다 보면 브라우저 탭에서 예전에 홈 화면 앱으로 남긴 로그인 흔적
+      // 때문에 실제로는 로그인 화면이 뜨는데 목장 배경을 받는다(src/utils/platform.js와 같은 판정).
       (function () {
         try {
           var key = 'little-biologist-auth'
-          var signedIn = Boolean(window.localStorage.getItem(key) || window.sessionStorage.getItem(key))
+          var isNative = Boolean(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+          var isStandalone =
+            !isNative &&
+            (window.navigator.standalone === true ||
+              Boolean(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches))
+          var storage = isNative || isStandalone ? window.localStorage : window.sessionStorage
+          var signedIn = Boolean(storage.getItem(key))
           var link = document.createElement('link')
           link.rel = 'preload'
           link.as = 'image'

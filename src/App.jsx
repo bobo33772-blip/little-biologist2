@@ -17,6 +17,7 @@ import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandl
 import RotateDeviceOverlay from './components/common/RotateDeviceOverlay'
 import StandaloneViewportFix from './components/common/StandaloneViewportFix'
 import RouteScrollReset from './components/common/RouteScrollReset'
+import ChunkErrorBoundary from './components/common/ChunkErrorBoundary'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
 import { MotionConfig } from 'framer-motion'
@@ -80,7 +81,9 @@ export default function App() {
       <RotateDeviceOverlay />
       <StandaloneViewportFix />
       <RouteScrollReset />
-      {/* 화면 JS를 기다리는 동안은 스피너 대신 index.html 스플래시와 같은 게임 로딩 장면을 보여 준다. */}
+      {/* 화면 JS를 기다리는 동안은 스피너 대신 index.html 스플래시와 같은 게임 로딩 장면을 보여 준다.
+          JS를 못 받으면(배포 직후·회선 끊김) 흰 화면 대신 한 번 새로고침하고, 그래도 안 되면 다시 시도 버튼을 띄운다. */}
+      <ChunkErrorBoundary>
       <Suspense fallback={<GameLoadingScreen />}>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
@@ -108,6 +111,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       </Suspense>
+      </ChunkErrorBoundary>
       </TutorialProvider>
       </RegisteredPhotosProvider>
       </BagProvider>

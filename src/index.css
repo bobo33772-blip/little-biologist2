@@ -5569,8 +5569,9 @@ body {
 /* 도착 페이드(ArrivalVeil): 이미 그려진 새 화면 위의 덮개가 걷힌다. 기본 opacity를 0으로 두어 fill-mode가
    backwards여도 애니메이션이 끝난 뒤 언마운트 전 한 프레임 동안 덮개가 다시 진하게 보이지 않게 한다.
    길이는 컴포넌트가 인라인 animation-duration으로 정한다(기능 화면 200ms, 목장 240ms). */
+/* 0.8에서 시작한다 — 1에서 시작하면 첫 한두 프레임이 덮개 단색으로만 보여 화면이 깜빡이는 것처럼 보였다. */
 @keyframes lb-veil-out {
-  from { opacity: 1; }
+  from { opacity: 0.8; }
   to { opacity: 0; }
 }
 

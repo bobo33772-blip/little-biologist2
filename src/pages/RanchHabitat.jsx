@@ -236,7 +236,7 @@ export default function RanchHabitat() {
   // 배경 img는 받은 뒤에 opacity를 올려야 transition-opacity가 늦게 온 그림에도 실제로 걸린다.
   // 이미 받아 둔 그림이면 첫 렌더부터 보인다.
   const isBackgroundShown = loadedImage === currentImage || isImageReady(currentImage)
-  // 커튼을 걷어도 되는지는 시한 없이 '정말로 받아서 decode까지 끝났는지'로 본다(대기 상한은 커튼 쪽 1.2초).
+  // 커튼을 걷어도 되는지는 시한 없이 '정말로 받아서 decode까지 끝났는지'로 본다(대기 상한은 커튼 쪽 2.2초).
   const backgroundLoad = useImageLoadProgress([currentImage])
   const isBackgroundDecoded = backgroundLoad.loaded >= backgroundLoad.total
 

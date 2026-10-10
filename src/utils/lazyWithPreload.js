@@ -15,7 +15,9 @@ export function lazyWithPreload(factory) {
           return module
         },
         (error) => {
-          // 회선이 잠깐 끊겨 실패했으면 다음 미리받기·렌더 때 다시 받을 수 있게 비워 둔다.
+          // 실패한 약속은 비워 둔다. 다만 브라우저는 실패한 import()를 문서의 module map에 남겨 같은 페이지에서는
+          // 같은 주소를 다시 받지 않으므로(Chromium 등), 이것만으로는 다시 받아지지 않는다. 실제 복구는 그 화면을
+          // 그릴 때 ChunkErrorBoundary가 새로고침으로 한다.
           promise = null
           throw error
         },

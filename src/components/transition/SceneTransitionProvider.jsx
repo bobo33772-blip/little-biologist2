@@ -9,7 +9,7 @@ import { isNativeApp, isStandaloneWebApp } from '../../utils/platform'
 
 // 장소 전환 원형 커튼(목장↔서식지 전용).
 // 들어가기: 탭한 서식지 자리에서 그 서식지 색의 원이 퍼져 화면을 덮고, 다 덮인 순간 이동한 뒤 다음 장면
-// 그림이 준비되면(markReady, 상한 1.2초) 커튼 전체가 옅어진다.
+// 그림이 준비되면(markReady, 상한 2.2초) 커튼 전체가 옅어진다.
 // 나오기: 화면 가운데에서 덮고, 목장에 도착하면 원이 방금 떠난 서식지 대객체 자리로 접혀 들어가며 지도가 드러난다.
 // 자주 오가는 다른 화면 이동에는 쓰지 않는다(이동을 늦추지 않으려고).
 //
@@ -82,8 +82,14 @@ class SceneMachine {
       navigateNow()
       return
     }
+    if (this.run?.phase === 'revealing' && source === 'user') {
+      // 걷히는 중에는 커튼이 이미 입력을 통과시킨다(pointer-events:none). 이때 누른 탭까지 버리면 버튼은
+      // 눌린 것처럼 보이는데 아무 일도 없어서 아이가 다시 눌러야 했다(리뷰에서 재현). 걷던 커튼을 바로
+      // 끝내고 새 전환을 시작한다. 탭은 이벤트 핸들러에서 오므로 finish의 flushSync가 안전하다.
+      this.finish(this.run)
+    }
     if (this.run) {
-      // 이미 전환 중이면 아이가 연타한 요청은 버린다. 프로그램이 부른 이동은 튜토리얼 진행·미션 보고 같은
+      // 덮는 중·덮인 동안 아이가 연타한 요청은 버린다. 프로그램이 부른 이동은 튜토리얼 진행·미션 보고 같은
       // 콜백이 버려지지 않게 커튼과 상관없이 바로 실행한다.
       if (source === 'program') navigateNow()
       return
@@ -256,7 +262,11 @@ class SceneMachine {
       } else {
         stableFrames += 1
       }
-      if (key !== run.fromKey && stableFrames >= 1 && run.ready) {
+      // 준비 신호는 지금 경로에서 보낸 것만 센다 — 덮인 동안 튜토리얼 replace 등으로 다른 화면으로 또
+      // 바뀌었는데 앞 화면의 신호로 걷으면, 새 화면이 그림 없이 드러난다. 같은 경로에서 state만 바뀐
+      // replace는 화면이 다시 마운트되지 않아 신호를 다시 보내지 않으므로 경로로 비교한다.
+      const pathname = this.latest.location?.pathname ?? null
+      if (key !== run.fromKey && stableFrames >= 1 && run.ready && run.readyPath === pathname) {
         this.reveal(run)
         return
       }
@@ -270,6 +280,7 @@ class SceneMachine {
     const run = this.run
     if (!run || !run.navigated || run.phase !== 'covered') return
     run.ready = true
+    run.readyPath = this.latest.location?.pathname ?? null
   }
 
   watchdog(run) {
@@ -333,10 +344,10 @@ class SceneMachine {
       this.setView(null)
       this.setLastRevealAt(performance.now())
     })
-    if (run.navigated && !run.aborted) {
-      window.clearTimeout(this.arrivedTimer)
-      this.arrivedTimer = window.setTimeout(() => this.setArrivedVia(null), IRIS.arrivedHoldMs)
-    }
+    // 취소된 전환(덮는 중 뒤로가기 등)이어도 앞 전환이 남긴 arrivedVia='iris'가 남지 않게 늘 되돌린다.
+    // 남아 있으면 이후 목장 도착 페이드가 계속 생략됐다.
+    window.clearTimeout(this.arrivedTimer)
+    this.arrivedTimer = window.setTimeout(() => this.setArrivedVia(null), run.navigated && !run.aborted ? IRIS.arrivedHoldMs : 0)
   }
 
   // 커튼이 덮인 동안 바깥에서 주소가 바뀐 경우. 덮는 중(이동 전)이면 이동을 취소하고 걷고, 이동한 뒤라면

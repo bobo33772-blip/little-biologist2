@@ -34,6 +34,8 @@ import { IRIS, SCENE_TRANSITIONS_ENABLED, playTapPop } from '../utils/motion'
 
 // 위치 권한을 못 받거나 실패했을 때 쓰는 기본 좌표(서울 시청).
 const DEFAULT_LOCATION = { latitude: 37.5665, longitude: 126.978 }
+// 지도 안 img 중 장면 그림(대객체)을 고를 때 쓴다(배경·흙길은 CSS 배경이라 img가 아니다).
+const RANCH_SCENE_IMAGE_SET = new Set(RANCH_SCENE_IMAGES)
 
 function WeatherBadge({ weather, visible, onToggle }) {
   const label = weather?.status === 'loading'
@@ -225,9 +227,20 @@ export default function Ranch() {
     if (isSceneFullyLoaded) markSceneReady()
   }, [isSceneFullyLoaded])
 
-  // 원형 커튼 아래로 도착했다면 목장 그림이 준비됐다고 알려 커튼을 걷게 한다(커튼 쪽 상한 1.2초).
+  // 원형 커튼 아래로 도착했다면 목장 그림이 준비됐다고 알려 커튼을 걷게 한다(커튼 쪽 상한 2.2초).
+  // 그림 파일을 미리 decode해 둬도 지도 안의 대객체 <img>는 처음 그릴 때 따로 decode해서, 첫 귀환 때
+  // 커튼이 걷힌 뒤 약 100ms 동안 대객체가 빈 채로 보였다(실측). 화면의 실제 img까지 decode된 뒤 알린다.
   useEffect(() => {
-    if (sceneReady) markSceneTransitionReady()
+    if (!sceneReady) return undefined
+    let cancelled = false
+    const sceneImages = Array.from(rootRef.current?.querySelectorAll('img') ?? [])
+      .filter((img) => RANCH_SCENE_IMAGE_SET.has(img.getAttribute('src')))
+    Promise.all(sceneImages.map((img) => img.decode?.().catch(() => {}))).then(() => {
+      if (!cancelled) markSceneTransitionReady()
+    })
+    return () => {
+      cancelled = true
+    }
   }, [sceneReady, markSceneTransitionReady])
 
   // 목장 장면이 다 그려지고 조금 쉰 뒤(1.5초), 여기서 갈 수 있는 화면들의 JS를 유휴 시간에 하나씩
@@ -1000,9 +1013,10 @@ export default function Ranch() {
           </div>
         )}
         {/* 도착 페이드: RanchCamera 바깥 형제로 opacity만 걷는다. 튜토리얼 단계 중에는 z-[110] 타깃만 덮개를
-            뚫고 보이는 어색함을 피하려고 생략한다. */}
+            뚫고 보이는 어색함을 피하려고 생략한다. 덮개 색은 도감·상점 같은 화면 바탕(ivory-100)과 같게 둔다 —
+            어두운 초록이면 밝은 화면에서 돌아올 때 한 번 어두워졌다가 다시 밝아지는 깜빡임이 보였다(실측). */}
         <ArrivalVeil
-          color="#0F1F17"
+          color="#F8F4E9"
           durationMs={240}
           className="absolute inset-0 z-[60]"
           disabled={!arrivalVeilAtMount || Boolean(step)}
