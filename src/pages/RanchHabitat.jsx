@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -12,7 +12,9 @@ import { useAuth } from '../router/AuthContext'
 import { reportMissionEvent } from '../utils/missionEvents'
 import { getRanchHabitatSoundSrc, getGrassStageSoundSrc } from '../utils/habitatSound'
 import { useSceneBackgroundMusic } from '../components/common/BackgroundMusicController'
-import useImagesReady, { isImageReady } from '../hooks/useImagesReady'
+import useImagesReady, { isImageReady, useImageLoadProgress } from '../hooks/useImagesReady'
+import { useSceneRevealed, useSceneTransition } from '../components/transition/SceneTransitionProvider'
+import { rememberHabitatExit } from '../utils/sceneMemory'
 
 // 각 서식지 배경 그림(IMAGE/*.png)을 실제로 보고, 빈 하늘·나무 우듬지·바위 뭉치처럼 곤충이
 // 어색하게 떠 보이는 자리를 피해서 다시 잡은 좌표다 — 숲/가로수는 그늘진 길·둥치 주변, 연못은
@@ -171,6 +173,8 @@ export default function RanchHabitat() {
   const { habitatId } = useParams()
   const navigate = useNavigate()
   const { step, advance, targetSpeciesId } = useTutorial()
+  const { go: goScene, markReady: markSceneTransitionReady, arrivedVia } = useSceneTransition()
+  const isTransitionRevealed = useSceneRevealed()
   const { user } = useAuth()
   const isDemoAccount = user?.username === DEMO_ACCOUNT_USERNAME
   const { photos, sketches, bronzeUnlocks } = useRegisteredPhotos()
@@ -202,13 +206,15 @@ export default function RanchHabitat() {
   // 입장 연출 상태 — entered는 제자리로 들어오기 시작했는지, entryDone은 다 들어와서 버튼 위치를
   // 재도 되는지다. 서식지가 바뀌면 렌더 중에 처음 상태로 되돌린다(effect에서 되돌리면 첫 마운트 값까지
   // 덮어써서, 처음부터 들어온 상태로 시작해야 하는 경우를 막는다).
-  const [entered, setEntered] = useState(false)
-  const [entryDone, setEntryDone] = useState(false)
+  // 원형 커튼으로 덮인 채 도착하면 커튼이 장면 전환을 맡으므로 확대 입장을 건너뛰고 처음부터 들어온 상태다.
+  const [arrivedUnderCurtain] = useState(() => arrivedVia === 'iris')
+  const [entered, setEntered] = useState(arrivedUnderCurtain)
+  const [entryDone, setEntryDone] = useState(arrivedUnderCurtain)
   const [entrySceneId, setEntrySceneId] = useState(scene.id)
   if (entrySceneId !== scene.id) {
     setEntrySceneId(scene.id)
-    setEntered(false)
-    setEntryDone(false)
+    setEntered(arrivedVia === 'iris')
+    setEntryDone(arrivedVia === 'iris')
   }
   const [loadedImage, setLoadedImage] = useState(null)
   const layerRef = useRef(null)
@@ -230,6 +236,18 @@ export default function RanchHabitat() {
   // 배경 img는 받은 뒤에 opacity를 올려야 transition-opacity가 늦게 온 그림에도 실제로 걸린다.
   // 이미 받아 둔 그림이면 첫 렌더부터 보인다.
   const isBackgroundShown = loadedImage === currentImage || isImageReady(currentImage)
+  // 커튼을 걷어도 되는지는 시한 없이 '정말로 받아서 decode까지 끝났는지'로 본다(대기 상한은 커튼 쪽 1.2초).
+  const backgroundLoad = useImageLoadProgress([currentImage])
+  const isBackgroundDecoded = backgroundLoad.loaded >= backgroundLoad.total
+
+  // 원형 커튼 아래로 도착했다면 배경 그림이 화면에 그려질 수 있을 때 커튼을 걷게 한다.
+  useEffect(() => {
+    if (isBackgroundShown && isBackgroundDecoded) markSceneTransitionReady()
+  }, [isBackgroundShown, isBackgroundDecoded, markSceneTransitionReady])
+
+  // 목장으로 돌아가면 원형 커튼이 이 서식지 대객체 자리로 접혀 들어간다 — 떠나는 순간을 남겨 둔다.
+  // 목장의 layout effect보다 먼저 돌도록 layout effect의 정리 단계에서 남긴다.
+  useLayoutEffect(() => () => rememberHabitatExit(scene.id), [scene.id])
 
   // 대객체 입장 시 살짝 크게 보였다가 제자리로 들어오는 전환 효과. 시작 상태가 한 번 그려진 뒤에
   // 바꿔야 브라우저가 전환을 실제로 애니메이션한다 — 그림이 이미 준비돼 있으면 이 effect가 첫
@@ -254,13 +272,14 @@ export default function RanchHabitat() {
   }, [entered, entryDone])
 
   // 대객체 입장 시 존 이름을 알려주는 배너 효과 (파티클 + 확대되는 이름). 장면이 들어오기 시작한 뒤에 연다.
+  // 원형 커튼으로 들어왔으면 커튼이 걷히기 시작한 뒤에 연다.
   useEffect(() => {
     setBannerZoneName(zoneName)
     setIsZoneBannerOpen(false)
-    if (!entered) return undefined
-    const id = window.setTimeout(() => setIsZoneBannerOpen(true), 80)
+    if (!entered || !isTransitionRevealed) return undefined
+    const id = window.setTimeout(() => setIsZoneBannerOpen(true), arrivedUnderCurtain ? 120 : 80)
     return () => window.clearTimeout(id)
-  }, [scene.id, zoneName, entered])
+  }, [scene.id, zoneName, entered, isTransitionRevealed, arrivedUnderCurtain])
 
   // 배너는 onClose가 바뀔 때마다 2.1초 타이머를 새로 건다 — 곤충을 누를 때마다 다시 렌더되면서
   // 배너가 사라지지 않던 문제가 있어서 함수를 고정한다.
@@ -367,7 +386,8 @@ export default function RanchHabitat() {
   const topButtonClass =
     'rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20'
 
-  const goBack = () => navigate('/ranch')
+  // 화면 가운데에서 이 서식지 색 원이 덮은 뒤 목장으로 간다(목장에서는 이 서식지 자리로 접혀 열린다).
+  const goBack = () => goScene('/ranch', { kind: 'iris', origin: null, color: scene.coverColor, source: 'user' })
 
   const openFieldGuide = (speciesId = selectedSpecies?.id ?? null) => {
     navigate('/field-guide', {
@@ -411,9 +431,10 @@ export default function RanchHabitat() {
           alt=""
           aria-hidden="true"
           onLoad={() => setLoadedImage(currentImage)}
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-            isBackgroundShown ? 'opacity-95' : 'opacity-0'
-          }`}
+          // 커튼이 덮고 있는 동안 도착한 그림은 바로 보여야 걷힐 때 반쯤 투명하지 않다.
+          className={`absolute inset-0 h-full w-full object-cover ${
+            arrivedUnderCurtain && !isTransitionRevealed ? '' : 'transition-opacity duration-700'
+          } ${isBackgroundShown ? 'opacity-95' : 'opacity-0'}`}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/35 to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_42%)]" />

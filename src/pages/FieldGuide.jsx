@@ -382,10 +382,10 @@ export default function FieldGuide() {
             role="dialog"
             aria-modal="true"
             aria-label="곤충 도감 80종 먹이사슬 피라미드"
-            className="fixed inset-0 z-50 grid place-items-center bg-ink-900/55 p-3"
+            className="lb-fade-in fixed inset-0 z-50 grid place-items-center bg-ink-900/55 p-3"
             onClick={() => setIsPyramidOpen(false)}
           >
-            <div onClick={(event) => event.stopPropagation()}>
+            <div className="lb-pop-in" onClick={(event) => event.stopPropagation()}>
               <FoodPyramid onClose={() => setIsPyramidOpen(false)} speciesList={speciesList} />
             </div>
           </div>,

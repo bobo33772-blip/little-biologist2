@@ -16,8 +16,11 @@ import GameLoadingScreen from './components/common/GameLoadingScreen'
 import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandler'
 import RotateDeviceOverlay from './components/common/RotateDeviceOverlay'
 import StandaloneViewportFix from './components/common/StandaloneViewportFix'
+import RouteScrollReset from './components/common/RouteScrollReset'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
+import { MotionConfig } from 'framer-motion'
+import { SceneTransitionProvider } from './components/transition/SceneTransitionProvider'
 
 // 라우트 단위 코드 스플리팅과 미리받기는 router/routeChunks.js 한 곳에서 관리한다.
 const {
@@ -58,6 +61,11 @@ function RootRedirect() {
 
 export default function App() {
   return (
+    // 모션 줄이기 설정을 framer-motion 연출(서식지 이름 배너·로그인 카드·뽑기)에도 한 번에 적용한다.
+    // 장면 전환 Provider는 AuthProvider·TutorialProvider 바깥에 둔다 — TutorialProvider는 {children} 옆에
+    // TutorialOverlay를 그리므로 안쪽에 두면 튜토리얼과 로그인 정보 쪽이 커튼 context 밖이 된다.
+    <MotionConfig reducedMotion="user">
+    <SceneTransitionProvider>
     <AuthProvider>
       <CurrencyProvider>
       <QuestsProvider>
@@ -71,6 +79,7 @@ export default function App() {
       <AndroidBackButtonHandler />
       <RotateDeviceOverlay />
       <StandaloneViewportFix />
+      <RouteScrollReset />
       {/* 화면 JS를 기다리는 동안은 스피너 대신 index.html 스플래시와 같은 게임 로딩 장면을 보여 준다. */}
       <Suspense fallback={<GameLoadingScreen />}>
       <Routes>
@@ -105,5 +114,7 @@ export default function App() {
       </QuestsProvider>
       </CurrencyProvider>
     </AuthProvider>
+    </SceneTransitionProvider>
+    </MotionConfig>
   )
 }

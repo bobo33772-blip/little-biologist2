@@ -5505,3 +5505,130 @@ body {
   pointer-events: none;
   animation: lb-curtain-out 280ms var(--lb-ease-out) backwards;
 }
+
+/* 장소 전환 원형 커튼(SceneCurtain, 목장↔서식지). body portal이고, 움직임은 SceneTransitionProvider가
+   원 div의 transform scale과 커튼 opacity만 WAAPI로 돌린다(clip-path 아님).
+   z-120: 튜토리얼 말풍선(100)·타깃(110)까지 함께 덮는다 — 아래에 두면 튜토리얼 중 장소 전환에서 커튼 위로
+   말풍선과 대상 서식지 그림이 떠 보이고 장소 이름이 그 그림에 가려졌다. 걷기가 시작되면 pointer-events가
+   none이라 다음 단계 타깃은 바로 누를 수 있다. 회전 안내(2000)·ZoneBanner(9999)보다는 아래. */
+.lb-scene-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  overflow: hidden;
+}
+
+.lb-scene-curtain__disc {
+  position: absolute;
+  border-radius: 50%;
+}
+
+/* 모션 줄이기: 원 대신 화면 전체 단색(transform 없음). */
+.lb-scene-curtain__disc.is-flat {
+  inset: 0;
+  border-radius: 0;
+}
+
+.lb-scene-curtain__center {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.lb-scene-curtain__label {
+  margin: 0;
+  font-family: "Jua", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: clamp(32px, 10vh, 52px);
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #FFF6DC;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* 기다림이 길 때만 나타나는 알은 이미 늦게 나타나는 것이라 스플래시의 150ms 등장 지연을 빼고 바로 옅게 나타난다. */
+.lb-scene-curtain .lb-scene-curtain__hop {
+  animation-delay: 0ms;
+}
+
+/* 탭 팝: 누른 그림이 살짝 눌렸다 튀어나온다(playTapPop, src/utils/motion.js). transform이 아니라 scale
+   속성을 써서 그림에 이미 걸린 transform(대객체 크기 배율)과 겹쳐도 크기가 튀지 않는다. */
+@keyframes lb-tap-pop {
+  0% { scale: 0.94; }
+  60% { scale: 1.04; }
+  100% { scale: 1; }
+}
+
+.lb-tap-pop {
+  animation: lb-tap-pop 140ms var(--lb-ease-pop) backwards;
+}
+
+/* 도착 페이드(ArrivalVeil): 이미 그려진 새 화면 위의 덮개가 걷힌다. 기본 opacity를 0으로 두어 fill-mode가
+   backwards여도 애니메이션이 끝난 뒤 언마운트 전 한 프레임 동안 덮개가 다시 진하게 보이지 않게 한다.
+   길이는 컴포넌트가 인라인 animation-duration으로 정한다(기능 화면 200ms, 목장 240ms). */
+@keyframes lb-veil-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.lb-arrival-veil {
+  opacity: 0;
+  animation: lb-veil-out 200ms var(--lb-ease-out) backwards;
+}
+
+/* 팝업·토스트·튜토리얼 말풍선 등장(등장만, 닫힐 때는 지금처럼 바로 사라진다). fill-mode는 backwards만 써서
+   끝난 뒤 카드·백드롭에 transform·opacity 값이 남지 않는다 — 카드 안 fixed 자식이나 튜토리얼 z-[110] 타깃의
+   기준이 바뀌지 않게 하려는 것이다. 모션 줄이기에서는 위쪽 reduced 규칙이 길이를 0.01ms로 줄인다. */
+@keyframes lb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lb-pop-in {
+  0% { opacity: 0; transform: scale(0.94); }
+  60% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes lb-sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lb-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 백드롭·안내 화면: 옅게 나타나기만 한다. */
+.lb-fade-in {
+  animation: lb-fade-in 160ms var(--lb-ease-out) backwards;
+}
+
+/* 확인·보상 카드: 살짝 작게 시작해 한 번 튀어 자리 잡는다. */
+.lb-pop-in {
+  animation: lb-pop-in 220ms var(--lb-ease-pop) backwards;
+}
+
+/* 공지 시트: 아래에서 올라온다. */
+.lb-sheet-up {
+  animation: lb-sheet-up 260ms var(--lb-ease-arrive) backwards;
+}
+
+.lb-toast-in {
+  animation: lb-toast-in 180ms var(--lb-ease-out) backwards;
+}
+
+/* 모션 줄이기: 위쪽 reduced 규칙(0.01ms)만으로는 애니메이션이 시작되기 전 첫 프레임에 시작 값(opacity 0)이 한 번
+   그려진다. 등장 연출은 끝나기를 기다리는 코드가 없으므로 아예 꺼서 첫 프레임부터 완성된 모습으로 보인다. */
+@media (prefers-reduced-motion: reduce) {
+  .lb-fade-in,
+  .lb-pop-in,
+  .lb-sheet-up,
+  .lb-toast-in {
+    animation: none;
+  }
+}

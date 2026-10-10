@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotionConfig } from 'framer-motion'
 import { useEffect, useMemo } from 'react'
 
 // 대객체(서식지)에 들어갈 때 재생되는 진입 효과 배너. 서식지 이름에 따라 테마(꽃밭/나무/풀밭/
@@ -99,6 +99,9 @@ const EXIT_TRANSITION = { duration: 0.35 }
 
 export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
   const theme = useMemo(() => getZoneTheme(zoneName), [zoneName])
+  // 모션 줄이기(App의 MotionConfig reducedMotion="user")에서는 framer가 y·scale을 끝값으로 '건너뛰기'만 해서
+  // 이름이 처음 값 → 끝 값(위로 34px)으로 툭 옮겨 보인다. 그래서 이름은 제자리에서 옅게 나타났다 사라지게만 한다.
+  const reduceMotion = useReducedMotionConfig()
 
   const particles = useMemo(
     () =>
@@ -196,13 +199,13 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
               marginInline: 'auto',
               transformOrigin: '50% 50%',
             }}
-            initial={{ y: 18, scale: 0.62, opacity: 0 }}
-            animate={{
+            initial={reduceMotion ? { opacity: 0 } : { y: 18, scale: 0.62, opacity: 0 }}
+            animate={reduceMotion ? { opacity: [0, 1, 1, 0] } : {
               y: [18, 0, 0, -34],
               scale: [0.62, 1.14, 1, 0.96],
               opacity: [0, 1, 1, 0],
             }}
-            exit={{ y: -40, opacity: 0, transition: EXIT_TRANSITION }}
+            exit={reduceMotion ? { opacity: 0, transition: EXIT_TRANSITION } : { y: -40, opacity: 0, transition: EXIT_TRANSITION }}
             transition={{ duration: 2, times: [0, 0.24, 0.72, 1], ease: 'easeOut' }}
           >
             <p className="text-xs font-black uppercase tracking-[0.42em] text-white/70 drop-shadow-md">

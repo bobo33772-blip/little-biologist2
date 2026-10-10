@@ -338,9 +338,11 @@ function TutorialOverlay() {
       className={`${shouldLockBackground ? 'pointer-events-auto' : 'pointer-events-none'} fixed inset-0 z-[100] overflow-hidden`}
       aria-live="polite"
     >
+      {/* 어두운 배경은 처음 깔릴 때만 옅게 나타난다(이어지는 단계에서는 같은 요소라 다시 재생되지 않는다). */}
       {!isCompact && (
         <div
-          className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
+          style={{ animationDuration: '200ms' }}
+          className={`lb-fade-in absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
             isClosing ? 'opacity-0' : 'opacity-100'
           }`}
         />
@@ -354,25 +356,28 @@ function TutorialOverlay() {
         } ${isClosing ? 'scale-50 opacity-0' : 'scale-100 opacity-100'}`}
       >
         <div className={`pointer-events-none relative z-20 transition-transform duration-300 ease-out ${
-          isCompact ? 'w-20 shrink-0 sm:w-24' : '-mt-2 sm:-mr-2 sm:mt-0 sm:scale-125'
+          isCompact ? 'w-20 shrink-0 sm:w-24' : '-mt-2 sm:-mr-2 sm:mt-0 sm:scale-125 short:scale-100'
         }`}>
           <div
             key={bounceKey}
             className={`tutorial-egg-character relative grid place-items-center animate-[tutorial-bounce_300ms_ease-out] ${
-              isCompact ? 'h-20 w-20 sm:h-24 sm:w-24' : 'h-32 w-32 sm:h-36 sm:w-36'
+              isCompact ? 'h-20 w-20 sm:h-24 sm:w-24' : 'h-32 w-32 sm:h-36 sm:w-36 short:h-24 short:w-24'
             }`}
           >
             <img className="h-full w-full object-contain" src={eggImage} alt="탐험도우미" />
           </div>
         </div>
 
+        {/* 단계가 바뀔 때마다 말풍선만 새로 튀어나온다(key). 위 stage는 가운데 정렬 transform과 닫힘 전환이
+            있어 건드리지 않고, 말풍선 section 자신에만 pop을 건다 — z-[110] 타깃은 이 section 밖이라 영향이 없다. */}
         <section
+          key={step.id}
           role="dialog"
           aria-modal="true"
           aria-label="탐험도우미 튜토리얼"
           data-click-sfx="none"
-          className={`tutorial-speech-bubble pointer-events-auto relative z-10 rounded-3xl bg-amber-50/95 shadow-xl ring-2 ring-amber-300/70 backdrop-blur ${
-            isCompact ? 'w-[min(72vw,18rem)] px-4 py-3' : 'w-[min(88vw,27rem)] px-5 py-5 sm:w-[27rem] sm:px-6'
+          className={`lb-pop-in tutorial-speech-bubble pointer-events-auto relative z-10 rounded-3xl bg-amber-50/95 shadow-xl ring-2 ring-amber-300/70 backdrop-blur ${
+            isCompact ? 'w-[min(72vw,18rem)] px-4 py-3' : 'w-[min(88vw,27rem)] px-5 py-5 sm:w-[27rem] sm:px-6 short:w-[min(62vw,34rem)] short:py-3'
           }`}
         >
           <span
@@ -383,20 +388,22 @@ function TutorialOverlay() {
             }`}
             aria-hidden="true"
           />
-          <div className="relative">
+          {/* 폰 가로(short)에서는 화면 높이 안에 들어오게 하고, 그래도 넘치면 말풍선 안에서만 스크롤한다
+              (꼬리가 잘리지 않게 section이 아니라 안쪽에 건다). */}
+          <div className="relative short:max-h-[calc(100vh-1.5rem-var(--safe-top)-var(--safe-bottom))] short:overflow-y-auto">
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className={`${isCompact ? 'text-xs' : 'text-sm'} font-black text-leaf-700`}>튜토리얼 {stepNumber}/{totalSteps}</span>
               <button type="button" onClick={finish} className={`${isCompact ? 'text-xs' : 'text-sm'} rounded-full px-2 py-1 font-black text-ink-700/60 hover:bg-white/70 hover:text-ink-900`}>
                 건너뛰기
               </button>
             </div>
-            <h2 className={`${isCompact ? 'text-lg' : 'text-2xl'} font-black text-ink-900`}>{step.title}</h2>
-            <p className={`${isCompact ? 'mt-1 text-sm leading-6' : 'mt-3 text-base leading-7'} font-bold text-ink-700/80`}>{step.description}</p>
+            <h2 className={`${isCompact ? 'text-lg' : 'text-2xl short:text-xl'} font-black text-ink-900`}>{step.title}</h2>
+            <p className={`${isCompact ? 'mt-1 text-sm leading-6' : 'mt-3 text-base leading-7 short:mt-1.5 short:text-sm short:leading-6'} font-bold text-ink-700/80`}>{step.description}</p>
 
             {isWelcomeStep && (
-              <div className="mt-4 grid gap-2.5 text-left">
+              <div className="mt-4 grid gap-2.5 text-left short:mt-3 short:grid-cols-3 short:gap-2">
                 {EGG_GROWTH_CARDS.map(([number, title, body]) => (
-                  <article key={number} className="rounded-2xl border border-lime-200 bg-white/80 px-4 py-3 shadow-sm">
+                  <article key={number} className="rounded-2xl border border-lime-200 bg-white/80 px-4 py-3 shadow-sm short:px-3 short:py-2">
                     <div className="flex items-baseline gap-2">
                       <span className="text-xs font-black text-leaf-600">{number}</span>
                       <h3 className="text-sm font-black text-ink-900">[{title}]</h3>
@@ -407,7 +414,7 @@ function TutorialOverlay() {
               </div>
             )}
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end short:mt-3">
               {needsAction ? (
                 <span className="rounded-full bg-leaf-50 px-3 py-2 text-xs font-black text-leaf-700">{step.actionLabel}</span>
               ) : (

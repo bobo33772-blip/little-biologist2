@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTutorial } from '../../context/TutorialContext'
 import { prefetchRoute, routeKeyForPath } from '../../router/routeChunks'
+import { playTapPop } from '../../utils/motion'
 
 // 튜토리얼 대역 버튼 위치를 회전·크기 변경 뒤에 다시 재는 시점(즉시 잰 다음).
 const RECT_REMEASURE_DELAYS_MS = [250, 850]
@@ -63,7 +64,9 @@ export default function RanchBackButton({ to = '/ranch', label = '목장으로 �
   }
 
   // 기능 화면 주소를 바로 열어 목장 JS를 아직 안 받은 경우를 위해, 누르는 순간 받기 시작한다.
-  function handlePointerDown() {
+  // 화살표 아이콘(첫 자식)만 살짝 튀게 한다 — 대역 버튼 자체에 transform을 걸면 튜토리얼 안내 표시가 함께 흔들린다.
+  function handlePointerDown(event) {
+    playTapPop(event.currentTarget.firstElementChild)
     prefetchRoute(routeKeyForPath(to))
   }
 

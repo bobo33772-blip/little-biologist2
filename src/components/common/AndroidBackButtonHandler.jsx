@@ -73,7 +73,7 @@ export default function AndroidBackButtonHandler() {
 
   return (
     <div className="pointer-events-none fixed inset-x-4 bottom-6 z-[1000] mb-[var(--safe-bottom)] flex justify-center" role="status" aria-live="polite">
-      <div className="rounded-full bg-ink-900/85 px-5 py-2.5 text-center font-['Jua'] text-sm text-white shadow-[0_12px_28px_rgba(35,60,20,0.24)]">
+      <div className="lb-toast-in rounded-full bg-ink-900/85 px-5 py-2.5 text-center font-['Jua'] text-sm text-white shadow-[0_12px_28px_rgba(35,60,20,0.24)]">
         &apos;뒤로&apos; 버튼을 한 번 더 누르면 게임이 종료돼요
       </div>
     </div>

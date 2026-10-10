@@ -6,9 +6,11 @@ export default function ConfirmationModal({ open, title, description, confirmLab
   // body에 직접 portal로 붙여야 한다 — FocusedLayout의 backdrop-blur 조상 안에서 렌더링되면
   // fixed의 기준이 뷰포트가 아니라 그 조상의 콘텐츠 박스 전체가 되어, 스크롤을 내려야
   // 모달이 보이는 문제가 생긴다.
+  // 등장만 연출한다. 닫을 때는 바로 사라진다 — 상점 pendingItem처럼 닫으며 값이 비는 곳에서 퇴장 중인 카드에
+  // 'undefined'가 비치지 않게 하려는 것이다.
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 px-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-soft">
+    <div className="lb-fade-in fixed inset-0 z-50 grid place-items-center bg-ink-900/40 px-4" role="dialog" aria-modal="true">
+      <div className="lb-pop-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-soft">
         <p className="text-lg font-bold text-ink-900">{title}</p>
         {description && <p className="mt-2 text-sm text-ink-700/80">{description}</p>}
         <div className="mt-6 flex justify-end gap-2">

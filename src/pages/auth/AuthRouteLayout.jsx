@@ -1,5 +1,5 @@
 import { Suspense, useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { useLocation, useOutlet } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AuthScreen } from './authVisuals'
 import LoadingOverlay from '../../components/common/LoadingOverlay'
@@ -12,6 +12,10 @@ import { whenSceneReady } from '../../utils/sceneReady'
 // 제목/로고는 그대로 있고, 카드 안 내용(Outlet)만 부드럽게 크로스페이드된다.
 export default function AuthRouteLayout() {
   const location = useLocation()
+  // <Outlet/>은 그릴 때마다 '지금' 주소의 화면을 읽어서, 사라지는 중인 로그인 카드도 이미 회원가입 폼을
+  // 그렸다(두 번 바뀌어 보임). 이 렌더 시점의 화면 element를 받아 넣으면 AnimatePresence가 나가는 자식을
+  // 그때 element 그대로 붙잡아 두므로, 나가는 카드는 끝까지 자기 화면을 그린다.
+  const outlet = useOutlet()
 
   useEffect(() => {
     wakeServer()
@@ -43,7 +47,7 @@ export default function AuthRouteLayout() {
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
             <Suspense fallback={<LoadingOverlay />}>
-              <Outlet />
+              {outlet}
             </Suspense>
           </motion.div>
         </AnimatePresence>

@@ -50,6 +50,12 @@ function loadAndDecode(src) {
   return promise
 }
 
+// 그림 한 장을 받아 decode까지 해 둔다. 장면 전환 커튼이 덮는 동안 다음 장면 그림을 준비할 때 쓴다 —
+// 아래 훅들과 같은 받기를 함께 쓰므로 도착 화면이 같은 그림을 다시 받지 않는다.
+export function decodeImage(src) {
+  return src ? loadAndDecode(src) : Promise.resolve()
+}
+
 // srcs가 모두 받아지고 decode될 때까지 false, 끝나면 true. timeoutMs가 지나면 덜 받아졌어도 true로
 // 바꿔서 덮개가 영영 안 걷히는 일이 없게 한다. srcs 목록이 바뀌면 그 목록 기준으로 다시 판단한다.
 export default function useImagesReady(srcs, { timeoutMs = 4000 } = {}) {
