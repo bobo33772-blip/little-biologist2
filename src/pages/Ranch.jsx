@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MainLayout from '../components/common/MainLayout'
 import RanchMapScene from '../components/common/RanchMapScene'
@@ -6,10 +6,11 @@ import PlacedItemsLayer from '../components/common/PlacedItemsLayer'
 import RanchCamera from '../components/common/RanchCamera'
 import RandomInsectEffect from '../components/common/RandomInsectEffect'
 import EggFirstRevealEffect from '../components/common/EggFirstRevealEffect'
+import RanchSceneCurtain from '../components/common/RanchSceneCurtain'
 import AnnouncementBoard from '../components/common/AnnouncementBoard'
 import { fetchRanchWeather, WEATHER_REFRESH_MS } from '../api/weather'
 import { mockUser } from '../data/mockData'
-import { HABITATS, getHabitatStats, getInsectSpecies, DEMO_ACCOUNT_USERNAME } from '../data/insectSpecies'
+import { HABITATS, RANCH_SCENE_IMAGES, getHabitatStats, getInsectSpecies, DEMO_ACCOUNT_USERNAME } from '../data/insectSpecies'
 import { getRepresentativeCharacterImage, getOwnedRepresentativeCharacters, GROWTH_MAX } from '../data/representativeCharacter'
 import { useAuth } from '../router/AuthContext'
 import { useBag } from '../context/BagContext'
@@ -22,6 +23,9 @@ import { isQuizCompletedToday } from '../utils/quizAvailability'
 import { fetchUserState, saveUserState } from '../api/userState'
 import ResultModal from '../components/common/ResultModal'
 import { apiUrl } from '../api/base'
+import { prefetchRoute, prefetchRoutesInIdle, routeKeyForPath } from '../router/routeChunks'
+import { markSceneReady, whenSceneReady } from '../utils/sceneReady'
+import useImagesReady, { useImageLoadProgress } from '../hooks/useImagesReady'
 
 // 위치 권한을 못 받거나 실패했을 때 쓰는 기본 좌표(서울 시청).
 const DEFAULT_LOCATION = { latitude: 37.5665, longitude: 126.978 }
@@ -133,6 +137,16 @@ export default function Ranch() {
     temperature: null,
   })
   const weatherCoordsRef = useRef(DEFAULT_LOCATION)
+  // 목장 그림(배경 + 흙길 + 대객체)이 다 준비됐는지. 준비될 때까지 목장 준비 커튼으로 덮는다.
+  // 상한 8초: 느린 회선(약 1.6Mbps)에서 4초로 두면 커튼이 먼저 걷히고 그림이 하나씩 붙는 조립
+  // 과정이 그대로 보였다(실측). 오래 걸리면 커튼에 진행 막대가 나타난다.
+  const sceneReady = useImagesReady(RANCH_SCENE_IMAGES, { timeoutMs: 8000 })
+  const sceneProgress = useImageLoadProgress(RANCH_SCENE_IMAGES)
+  const isSceneFullyLoaded = sceneProgress.loaded >= sceneProgress.total
+  // 커튼이 걷혀 DOM에서 빠졌는지. 첫 렌더에 이미 준비돼 있으면(다시 방문) 커튼을 아예 그리지 않는다.
+  // 알 공개·튜토리얼·랜덤곤충처럼 커튼 아래에서 먼저 시작하면 안 되는 연출은 이 값 뒤로 미룬다.
+  const [isSceneRevealed, setIsSceneRevealed] = useState(sceneReady)
+  const handleCurtainGone = useCallback(() => setIsSceneRevealed(true), [])
 
   function handleSideNavigation(item) {
     if (item.to === '/quiz' && isQuizCompletedToday(user?.uid)) {
@@ -169,13 +183,43 @@ export default function Ranch() {
 
   // 아직 튜토리얼을 안 끝낸 계정이 목장에 들어오면(배치 편집 진입이 아닌 경우) 잠깐 뒤에 띄운다 —
   // 다른 화면 상태가 먼저 자리 잡은 뒤에 나타나야 튜토리얼 카드가 덜컥거리지 않는다.
+  // 목장 준비 커튼이 걷힌 뒤부터 센다(커튼 아래에서 튜토리얼 카드가 먼저 뜨지 않게).
   useEffect(() => {
-    if (location.state?.editPlacementId) return
+    if (location.state?.editPlacementId || !isSceneRevealed) return
     const id = window.setTimeout(() => {
       openIfNeeded()
     }, 300)
     return () => window.clearTimeout(id)
-  }, [location.state?.editPlacementId, openIfNeeded])
+  }, [location.state?.editPlacementId, openIfNeeded, isSceneRevealed])
+
+  // 첫 장면이 다 그려졌다는 신호 — 효과음·배경음과 다른 화면 JS 미리받기가 이 뒤에 시작한다.
+  // 커튼이 상한(8초)에 걸려 먼저 걷혔으면 남은 그림을 다 받은 뒤에 보낸다. 그 전에 보내면 효과음
+  // 미리받기가 아직 오는 대객체 그림과 회선을 다툰다(실측). 커튼 없이 바로 준비된 경우도 여기서 보낸다.
+  useEffect(() => {
+    if (isSceneFullyLoaded) markSceneReady()
+  }, [isSceneFullyLoaded])
+
+  // 목장 장면이 다 그려지고 조금 쉰 뒤(1.5초), 여기서 갈 수 있는 화면들의 JS를 유휴 시간에 하나씩
+  // 미리 받아 둔다 — 첫 진입 때 '불러오는 중' 스피너 없이 바로 그려지게 하려는 것. 이미 받은
+  // 청크는 다시 받지 않으므로 목장에 다시 돌아와도 비용이 없다.
+  useEffect(() => {
+    let cancelled = false
+    let timer = null
+    let stopIdlePrefetch = null
+    whenSceneReady().then(() => {
+      if (cancelled) return
+      timer = window.setTimeout(() => {
+        stopIdlePrefetch = prefetchRoutesInIdle([
+          'ranchHabitat', 'fieldGuide', 'exploration', 'quests', 'bag', 'shop', 'quiz', 'friends', 'profile', 'aiCompanion',
+        ])
+      }, 1500)
+    })
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      stopIdlePrefetch?.()
+    }
+  }, [])
 
   // 대객체(서식지) 위치/크기 편집값. ranch.md: 편집 모드에서 대객체를 드래그하면 위치가 바뀌고,
   // 길(RanchPaths)은 이 좌표를 그대로 읽어서 자동으로 따라간다 — 별도 동기화 로직이 없다.
@@ -343,7 +387,7 @@ export default function Ranch() {
 
   return (
     <MainLayout showHeader={false} showBottomNav={false}>
-      <div className="relative h-screen min-h-0 overflow-hidden bg-ink-950">
+      <div className="relative h-screen min-h-0 overflow-hidden bg-[#0F1F17]">
         <RanchCamera>
           <RanchMapScene
             habitats={HABITATS}
@@ -377,9 +421,9 @@ export default function Ranch() {
             onPositionChange={updatePlacementPosition}
           />
 
-          {!isEditing && shouldShowRandomInsectEffect && <RandomInsectEffect />}
+          {!isEditing && shouldShowRandomInsectEffect && isSceneRevealed && <RandomInsectEffect />}
           <EggFirstRevealEffect
-            trigger={location.state?.firstLogin}
+            trigger={location.state?.firstLogin && isSceneRevealed}
             representativeCharacter={representativeCharacter}
             onActiveChange={setIsEggGrantFlowActive}
           />
@@ -506,6 +550,7 @@ export default function Ranch() {
                 </button>
                 <button
                   type="button"
+                  onPointerDown={() => prefetchRoute('profile')}
                   onClick={() => navigate('/profile/edit')}
                   className="ranch-top-icon-button"
                   aria-label="설정"
@@ -619,6 +664,8 @@ export default function Ranch() {
                 <button
                   key={item.to}
                   type="button"
+                  // 손가락이 닿는 순간 받기 시작하면 떼는 사이(약 100ms)만큼 청크가 먼저 도착한다.
+                  onPointerDown={() => prefetchRoute(routeKeyForPath(item.to))}
                   onClick={() => handleSideNavigation(item)}
                   className={`ranch-hud-button ranch-hud-icon ranch-hud-icon--${item.to.slice(1).replace('/', '-')}`}
                   aria-label={item.label}
@@ -878,6 +925,13 @@ export default function Ranch() {
         )}
       </div>
       <AnnouncementBoard open={isAnnouncementOpen} onClose={() => setIsAnnouncementOpen(false)} />
+      {!isSceneRevealed && (
+        <RanchSceneCurtain
+          ready={sceneReady}
+          progress={sceneProgress.total ? sceneProgress.loaded / sceneProgress.total : undefined}
+          onGone={handleCurtainGone}
+        />
+      )}
     </MainLayout>
   )
 }

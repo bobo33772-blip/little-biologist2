@@ -5482,3 +5482,26 @@ body {
   margin-bottom: var(--safe-bottom);
   max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right)) !important;
 }
+
+/* 모션 토큰(게임다운 화면 흐름). 이 파일 앞쪽에 같은 규칙의 사본이 여러 번 있으므로 맨 끝에 한 번만 둔다.
+   덮기·걷기 / 도착 페이드·감속 / 팝(오버슈트 4% 이하) / 일반 페이드. */
+:root {
+  --lb-ease-cover: cubic-bezier(0.65, 0, 0.35, 1);
+  --lb-ease-arrive: cubic-bezier(0.22, 1, 0.36, 1);
+  --lb-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lb-ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* 목장 준비 커튼(RanchSceneCurtain) 걷기. 모양은 index.html의 .lb-boot를 그대로 쓴다.
+   fill-mode는 backwards만 쓰므로 끝난 뒤의 값(opacity 0)을 기본값으로 둬서, 언마운트 전 한 프레임에
+   커튼이 다시 보이지 않게 한다. */
+@keyframes lb-curtain-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.lb-ranch-curtain.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+  animation: lb-curtain-out 280ms var(--lb-ease-out) backwards;
+}

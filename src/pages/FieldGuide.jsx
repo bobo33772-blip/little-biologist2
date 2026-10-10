@@ -310,13 +310,14 @@ export default function FieldGuide() {
                   className="relative mb-4 overflow-hidden rounded-xl bg-ivory-50"
                 >
                   {selectedImage ? (
-                    <img src={selectedImage} alt={selected.name} className="h-56 w-full object-contain p-3" />
+                    <img src={selectedImage} alt={selected.name} decoding="async" className="h-56 w-full object-contain p-3" />
                   ) : (
                     <>
                       <img
                         src={selected.defaultUrl ?? selected.image}
                         alt=""
                         aria-hidden="true"
+                        decoding="async"
                         className="h-56 w-full object-contain p-3 grayscale brightness-0 opacity-35"
                       />
                       <div className="absolute bottom-3 left-0 right-0 text-center">

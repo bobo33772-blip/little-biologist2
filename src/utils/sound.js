@@ -89,29 +89,46 @@ function createAudio(src) {
 }
 
 // 같은 효과음이 연속으로 겹쳐 재생될 때(버튼 연타 등) 끊기지 않도록 소스별로 오디오 인스턴스를
-// 여러 개 돌려쓴다.
-function getAudioPool(src) {
+// 최대 AUDIO_POOL_SIZE개까지 돌려쓴다. 미리받기(primeSfx)는 1개만 만들어 두고, 쉬고 있는 인스턴스가
+// 없을 때(연타로 모두 재생 중일 때)만 그 자리에서 하나씩 늘린다. 오디오는 Range 요청이라 HTTP
+// 캐시를 잘 못 타서(실측: 같은 파일을 인스턴스마다 다시 받음), 미리 3개를 채워 두면 요청만 늘어난다.
+function takeAudioFromPool(src) {
   let pool = audioPools.get(src)
   if (!pool) {
-    pool = Array.from({ length: AUDIO_POOL_SIZE }, () => createAudio(src))
+    pool = []
     audioPools.set(src, pool)
   }
-  return pool
+  const idleIndex = pool.findIndex((audio) => audio.paused)
+  let audio
+  if (idleIndex >= 0) {
+    audio = pool.splice(idleIndex, 1)[0]
+  } else if (pool.length < AUDIO_POOL_SIZE) {
+    audio = createAudio(src)
+  } else {
+    audio = pool.shift()
+  }
+  pool.push(audio)
+  return audio
 }
 
+// 미리받기용: 소스마다 인스턴스를 1개만 만든다(3개씩 만들면 요청이 3배로 늘어 첫 화면과 회선을
+// 다툰다). 다 받았는지 기다릴 수 있게 그 오디오를 돌려준다.
 export function primeSfx(src) {
   try {
-    if (!src) return
-    getAudioPool(src)
+    if (!src) return null
+    let pool = audioPools.get(src)
+    if (!pool) {
+      pool = [createAudio(src)]
+      audioPools.set(src, pool)
+    }
+    return pool[0] ?? null
   } catch {
-    // no-op
+    return null
   }
 }
 
 export function primeSfxList(srcList) {
-  for (const src of srcList) {
-    primeSfx(src)
-  }
+  return srcList.map((src) => primeSfx(src)).filter(Boolean)
 }
 
 function playAudioInstance(audio, src, volume) {
@@ -136,10 +153,7 @@ function playAudioInstance(audio, src, volume) {
 // 브라우저 자동재생 정책·미지원 환경에서도 화면 흐름이 끊기지 않도록, 재시도까지 실패하면 조용히 무시한다.
 export function playSfx(src, { volume = 1 } = {}) {
   try {
-    const pool = getAudioPool(src)
-    const audio = pool.shift() ?? createAudio(src)
-    pool.push(audio)
-    playAudioInstance(audio, src, volume)
+    playAudioInstance(takeAudioFromPool(src), src, volume)
   } catch {
     // no-op
   }

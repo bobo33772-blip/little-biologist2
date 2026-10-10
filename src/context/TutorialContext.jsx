@@ -5,6 +5,7 @@ import { useQuests } from './QuestsContext'
 import { EGG_GRANT_CLOSED_EVENT } from '../components/common/EggFirstRevealEffect'
 import { playSfx } from '../utils/sound'
 import { SFX } from '../utils/sfx'
+import { prefetchRoute, routeKeyForPath } from '../router/routeChunks'
 
 const STORAGE_KEY = 'hasCompletedTutorial'
 const LEGACY_STORAGE_KEY = 'little-biologist-tutorial-completed'
@@ -43,6 +44,23 @@ const STEP_ROUTES = {
   exploration: '/exploration',
   quests: '/quests',
   bag: '/bag',
+}
+
+// 페이지 안내 단계에서 '다음'을 누르면 넘어가는 화면(TutorialOverlay의 next()).
+const NEXT_STEP_ROUTES = {
+  'field-guide': '/exploration',
+  exploration: '/quests',
+  quests: '/bag',
+}
+
+// 액션 단계에서 거치거나 타깃을 누르면 가게 되는 화면. 청크 미리받기에만 쓴다 — 서식지 주소는
+// 어느 서식지든 같은 청크(RanchHabitat)라 id 자리에 아무 값이나 둔다. insect 단계는 목장에서
+// 서식지로 자동 이동(replace)한 뒤 곤충을 누르면 도감으로 간다.
+const STEP_ACTION_ROUTES = {
+  'random-insect': ['/field-guide'],
+  'return-to-ranch': ['/ranch'],
+  habitat: ['/ranch/habitat'],
+  insect: ['/ranch/habitat', '/field-guide'],
 }
 
 // 탐험도우미(도움말) 버튼으로 튜토리얼을 다시 볼 때는 이 두 단계를 건너뛴다 — 둘 다 최초 1회용
@@ -171,6 +189,16 @@ export function TutorialProvider({ children }) {
     if (route) navigate(route, { replace: true })
   }, [location.pathname, location.state?.editPlacementId, navigate, stepIndex, targetHabitatId])
 
+  // 튜토리얼이 이번 단계에서 데려갈 화면들의 JS를 단계가 바뀌는 즉시 받아 둔다 — 안내를 따라
+  // 누르자마자 '불러오는 중' 스피너가 끼면 아이가 다음 안내를 놓치기 쉽다.
+  useEffect(() => {
+    if (stepIndex === null) return
+    const id = STEPS[stepIndex]?.id
+    ;[STEP_ROUTES[id], NEXT_STEP_ROUTES[id], ...(STEP_ACTION_ROUTES[id] ?? [])].forEach((path) => {
+      if (path) prefetchRoute(routeKeyForPath(path))
+    })
+  }, [stepIndex])
+
   const isWaitingForEggGrant = Boolean(location.state?.firstLogin && !eggGrantReady)
   const isAuthScreen = location.pathname === '/login' || location.pathname === '/signup'
 
@@ -260,11 +288,7 @@ function TutorialOverlay() {
 
   const eggImage = featuredCharacterImage ?? FALLBACK_EGG_IMAGE
 
-  const nextRoute = {
-    'field-guide': '/exploration',
-    exploration: '/quests',
-    quests: '/bag',
-  }[step.id]
+  const nextRoute = NEXT_STEP_ROUTES[step.id]
   const needsAction =
     step.id === 'random-insect' || step.id === 'return-to-ranch' || step.id === 'habitat' || step.id === 'insect'
   // field-guide/exploration/quests/bag는 액션 없이 그냥 페이지를 보여주는 안내라, 화면 가운데를

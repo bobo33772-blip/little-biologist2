@@ -93,6 +93,10 @@ function getParticleMotion(theme, distance) {
   }
 }
 
+// 닫힐 때 바깥 레이어가 0.35초 만에 투명해지므로, 안쪽 요소의 퇴장도 그 안에 끝나게 맞춘다. 안쪽이
+// 등장 때의 긴 transition(최대 1.75초+지연)으로 퇴장하면 보이지 않는 전체 화면 레이어가 2초 넘게 DOM에 남는다.
+const EXIT_TRANSITION = { duration: 0.35 }
+
 export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
   const theme = useMemo(() => getZoneTheme(zoneName), [zoneName])
 
@@ -125,7 +129,7 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
           style={{ background: 'rgba(0, 0, 0, 0.28)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.35 } }}
+          exit={{ opacity: 0, transition: EXIT_TRANSITION }}
           aria-hidden="true"
         >
           <motion.div
@@ -137,7 +141,7 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
             }}
             initial={{ scale: 0.45, opacity: 0 }}
             animate={{ scale: [0.45, 1.05, 0.94], opacity: [0, 1, 0.62] }}
-            exit={{ scale: 1.2, opacity: 0 }}
+            exit={{ scale: 1.2, opacity: 0, transition: EXIT_TRANSITION }}
             transition={{ duration: 1.75, ease: 'easeOut' }}
           />
 
@@ -150,7 +154,7 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
             }}
             initial={{ scaleX: 0, opacity: 0 }}
             animate={{ scaleX: [0, 1.08, 1], opacity: [0, 1, 0.72] }}
-            exit={{ y: -28, opacity: 0 }}
+            exit={{ y: -28, opacity: 0, transition: EXIT_TRANSITION }}
             transition={{ duration: 0.7, ease: 'easeOut' }}
           />
 
@@ -172,7 +176,7 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
                   ...motionPath,
                   opacity: [0, 1, 0],
                 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, transition: EXIT_TRANSITION }}
                 transition={{
                   duration: 1.75,
                   delay: particle.delay,
@@ -198,7 +202,7 @@ export default function ZoneBannerOverlay({ zoneName, isOpen, onClose }) {
               scale: [0.62, 1.14, 1, 0.96],
               opacity: [0, 1, 1, 0],
             }}
-            exit={{ y: -40, opacity: 0 }}
+            exit={{ y: -40, opacity: 0, transition: EXIT_TRANSITION }}
             transition={{ duration: 2, times: [0, 0.24, 0.72, 1], ease: 'easeOut' }}
           >
             <p className="text-xs font-black uppercase tracking-[0.42em] text-white/70 drop-shadow-md">

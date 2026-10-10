@@ -4,7 +4,7 @@
 // 연결 관계(양방향, 중복 제거):
 //   흙 속 - 연못, 흙 속 - 숲, 연못 - 숲, 연못 - 풀밭, 숲 - 가로수, 가로수 - 풀밭
 //
-// public/ranch/path-strip.png는 IMAGE/인테리어/길/가로.png(사용자가 준 흙길 이미지)에서
+// public/ranch/path-strip.webp(원본 path-strip.png를 scripts/convert-scene-images.mjs로 변환)는 IMAGE/인테리어/길/가로.png(사용자가 준 흙길 이미지)에서
 // 둥근 양쪽 끝을 잘라내고 가운데 직선 구간만 남긴 텍스처다 — 원본은 캡슐 모양이라
 // background-repeat로 이어 붙이면 끝부분이 반복되어 보였음. 가운데 부분은 자연스러운
 // 자갈/흙 패턴이라 이어 붙여도 이음매가 거의 안 보인다.
@@ -138,7 +138,7 @@ export default function RanchPaths({ positions }) {
           <span
             className="absolute inset-0 rounded-full opacity-95"
             style={{
-              backgroundImage: 'url(/ranch/path-strip.png)',
+              backgroundImage: 'url(/ranch/path-strip.webp)',
               backgroundRepeat: 'repeat-x',
               backgroundSize: 'auto 100%',
             }}

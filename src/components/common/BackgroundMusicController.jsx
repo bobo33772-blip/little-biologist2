@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { readMusicVolume, MUSIC_VOLUME_CHANGE_EVENT } from '../../utils/sound'
+import { whenSceneReady } from '../../utils/sceneReady'
 
 const BACKGROUND_MUSIC_SRC = '/sounds/backgroundmusic.mp3'
 const BASE_VOLUME = 0.35
@@ -138,17 +139,20 @@ export function useSceneBackgroundMusic(src, { volume = 0.35, suppressGlobalMusi
 
 export default function BackgroundMusicController() {
   useEffect(() => {
+    let cancelled = false
     let audio = null
     let resumePlayback = null
     let syncVolume = null
 
-    // new Audio(src)는 만들어지는 즉시 네트워크에서 받아오기 시작한다(2.4MB) — 어차피 자동재생
-    // 정책 때문에 첫 재생은 사용자의 첫 클릭/키입력까지 기다려야 하므로, 오디오 객체 생성 자체도
-    // 초기 JS/이미지 로딩과 경합하지 않도록 유휴 시간까지 늦춘다.
-    const schedule = window.requestIdleCallback || ((cb) => window.setTimeout(cb, 200))
-    const cancelSchedule = window.cancelIdleCallback || window.clearTimeout
+    // new Audio(src)는 만들어지는 즉시 네트워크에서 받아오기 시작한다(1.5MB) — 어차피 자동재생
+    // 정책 때문에 첫 재생은 사용자의 첫 클릭/키입력까지 기다려야 하므로, 오디오 객체 생성 자체를
+    // 첫 장면이 다 그려진 뒤(whenSceneReady)나 첫 터치/키입력 중 먼저 오는 쪽까지 늦춘다.
+    // 첫 터치 쪽이면 그 핸들러 안에서 바로 만들고 재생을 시도해야 아이폰이 재생을 허락한다.
+    const start = () => {
+      if (cancelled || audio) return
+      window.removeEventListener('pointerdown', start)
+      window.removeEventListener('keydown', start)
 
-    const handle = schedule(() => {
       audio = getBackgroundMusicAudio()
       applyVolume(audio)
 
@@ -161,6 +165,7 @@ export default function BackgroundMusicController() {
       // 이후로 지연 실행됨)가 반영되기 전이라 isSuppressed가 여전히 false다. 그 상태에서 바로
       // tryPlay를 부르면 공용 배경음악이 잠깐 켜졌다가 상점 전용 음악과 겹쳐 들린다. setTimeout(0)으로
       // 미루면 그사이 Shop의 이펙트가 먼저 반영되어 isSuppressed가 true로 바뀐 뒤 이 검사를 하게 된다.
+      // (사파리는 1초 이내 타이머에 사용자 제스처를 넘겨주므로 첫 터치 경로에서도 재생이 허락된다.)
       resumePlayback = () => {
         window.setTimeout(() => {
           if (isSuppressed) return
@@ -174,10 +179,16 @@ export default function BackgroundMusicController() {
       window.addEventListener('pointerdown', resumePlayback)
       window.addEventListener('keydown', resumePlayback)
       window.addEventListener(MUSIC_VOLUME_CHANGE_EVENT, syncVolume)
-    })
+    }
+
+    window.addEventListener('pointerdown', start)
+    window.addEventListener('keydown', start)
+    whenSceneReady().then(start)
 
     return () => {
-      cancelSchedule(handle)
+      cancelled = true
+      window.removeEventListener('pointerdown', start)
+      window.removeEventListener('keydown', start)
       if (resumePlayback) window.removeEventListener('pointerdown', resumePlayback)
       if (resumePlayback) window.removeEventListener('keydown', resumePlayback)
       if (syncVolume) window.removeEventListener(MUSIC_VOLUME_CHANGE_EVENT, syncVolume)

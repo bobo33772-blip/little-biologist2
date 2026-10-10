@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import RanchPaths from './RanchPaths'
 import { getWeatherParticleCount } from '../../api/weather.js'
 import { useTutorial } from '../../context/TutorialContext'
+import { prefetchRoute } from '../../router/routeChunks'
 
 const CLOUDY_IMAGES = [
   { src: new URL('../../../IMAGE/날씨 반영/구름 많음1.png', import.meta.url).href, className: 'ranch-weather-cloud--one' },
@@ -48,6 +49,8 @@ export default function RanchMapScene({
   onSelect,
   onSelectEdit,
   onPositionChange,
+  // 서식지를 눌렀을 때 갈 화면의 청크 키(routeChunks.js). 친구 목장은 친구 서식지 화면으로 간다.
+  habitatRouteKey = 'ranchHabitat',
 }) {
   const { step, targetHabitatId } = useTutorial()
   const sceneRef = useRef(null)
@@ -143,7 +146,11 @@ export default function RanchMapScene({
               else onSelect?.(h)
             }}
             onPointerDown={(event) => {
-              if (!isEditing) return
+              if (!isEditing) {
+                // 서식지를 누르려는 순간 서식지 화면 JS를 받기 시작한다(이미 받았으면 아무 일도 없다).
+                prefetchRoute(habitatRouteKey)
+                return
+              }
               event.preventDefault()
               event.stopPropagation()
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -158,8 +165,13 @@ export default function RanchMapScene({
               src={h.image}
               alt=""
               aria-hidden="true"
+              // 그림이 오기 전에도 폭(objectSizeStyle)과 이 비율로 높이를 미리 잡아 이름표가 밀리지 않게 한다.
+              // height:'auto'를 함께 둬야 height 속성이 고정 높이로 쓰이지 않고 비율로만 쓰인다.
+              width={h.imageWidth}
+              height={h.imageHeight}
               style={{
                 ...objectSizeStyle(h.id),
+                height: 'auto',
                 transform: `scale(${scale})`,
                 transformOrigin: 'center bottom',
               }}

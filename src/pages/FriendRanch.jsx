@@ -85,7 +85,7 @@ export default function FriendRanch() {
 
   return (
     <MainLayout showHeader={false} showBottomNav={false}>
-      <div className="relative h-screen min-h-0 overflow-hidden bg-ink-950">
+      <div className="relative h-screen min-h-0 overflow-hidden bg-[#0F1F17]">
         {isLoading ? (
           <p className="grid h-full place-items-center text-sm text-white/70">목장을 불러오는 중...</p>
         ) : !ranch ? (
@@ -98,6 +98,7 @@ export default function FriendRanch() {
               positions={ranch.positions}
               scales={ranch.scales}
               onSelect={(h) => navigate(`/friends/ranch/${uid}/${h.id}`)}
+              habitatRouteKey="friendRanchHabitat"
             />
             <PlacedItemsLayer placements={ranch.placements} isEditing={false} onSelect={() => {}} />
           </RanchCamera>

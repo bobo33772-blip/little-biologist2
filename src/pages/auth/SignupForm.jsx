@@ -4,6 +4,9 @@ import { User, Lock, Sprout } from 'lucide-react'
 import { useAuth } from '../../router/AuthContext'
 import { postAuth } from '../../api/auth'
 import AuthToast from './AuthToast'
+import { RANCH_SCENE_IMAGES } from '../../data/insectSpecies'
+import { preloadImages } from '../../utils/preloadImages'
+import { prefetchRoute } from '../../router/routeChunks'
 
 function getSignupErrorMessage(status) {
   if (status === 409) return '이미 사용 중인 아이디예요.'
@@ -33,6 +36,9 @@ export default function SignupForm() {
     if (!username || !password || !nickname || status === 'loading') return
     setStatus('loading')
     setToast(null)
+    // 응답을 기다리는 동안 목장 그림과 JS를 미리 받아 둔다 — 도착하면 목장 준비 커튼이 금방 걷힌다.
+    preloadImages(RANCH_SCENE_IMAGES)
+    prefetchRoute('ranch')
     const result = await postAuth('/api/signup', { username, password, nickname })
     setStatus('idle')
     if (!result.ok || !result.data.user) {

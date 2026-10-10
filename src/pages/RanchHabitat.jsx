@@ -1,63 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import forestImage from '../../IMAGE/forest.png'
-import pondImage from '../../IMAGE/pond.png'
-import soilImage from '../../IMAGE/soil.png'
-import streetImage from '../../IMAGE/street.png'
-import fieldFlowerImage from '../../IMAGE/field_flower.png'
-import fieldTreeImage from '../../IMAGE/field_tree.png'
 import ZoneBannerOverlay from '../components/features/ZoneBannerOverlay'
 import RanchCamera from '../components/common/RanchCamera'
 import { getHabitatById, getSpeciesByHabitat, getInsectSpecies, DEMO_ACCOUNT_USERNAME } from '../data/insectSpecies'
+import { HABITAT_SCENES } from '../data/habitatScenes'
 import { useTutorial } from '../context/TutorialContext'
 import { useRegisteredPhotos } from '../context/RegisteredPhotosContext'
 import { useAuth } from '../router/AuthContext'
 import { reportMissionEvent } from '../utils/missionEvents'
 import { getRanchHabitatSoundSrc, getGrassStageSoundSrc } from '../utils/habitatSound'
 import { useSceneBackgroundMusic } from '../components/common/BackgroundMusicController'
-
-const HABITAT_SCENES = {
-  forest: {
-    id: 'forest',
-    name: '숲',
-    images: [forestImage],
-    description: '나무 그늘 아래 숨은 곤충들을 가까이서 관찰할 수 있어요.',
-    accent: 'from-emerald-950/90 via-emerald-900/35 to-ink-950/90',
-  },
-  pond: {
-    id: 'pond',
-    name: '연못·습지',
-    images: [pondImage],
-    description: '물가와 갈대 사이를 따라 이동하는 곤충들을 살펴볼 수 있어요.',
-    accent: 'from-cyan-950/90 via-sky-900/35 to-ink-950/90',
-  },
-  soil: {
-    id: 'soil',
-    name: '흙 속',
-    images: [soilImage],
-    description: '땅 위와 흙 속에 숨어 지내는 곤충들을 발견할 수 있어요.',
-    accent: 'from-amber-950/90 via-stone-900/35 to-ink-950/90',
-  },
-  'street-trees': {
-    id: 'street-trees',
-    name: '가로수',
-    images: [streetImage],
-    description: '가로수 주변을 오가는 곤충들을 도심 풍경 속에서 만나보세요.',
-    accent: 'from-lime-950/90 via-green-900/35 to-ink-950/90',
-  },
-  grass: {
-    id: 'grass',
-    name: '풀밭',
-    images: [fieldFlowerImage, fieldTreeImage],
-    descriptions: [
-      '꽃이 많은 풀밭에서는 꽃을 찾는 곤충들을 먼저 관찰할 수 있어요.',
-      '나무가 섞인 풀밭에서는 가지와 줄기 주변 곤충들까지 이어서 볼 수 있어요.',
-    ],
-    accent: 'from-emerald-950/90 via-lime-900/35 to-ink-950/90',
-  },
-}
+import useImagesReady, { isImageReady } from '../hooks/useImagesReady'
 
 // 각 서식지 배경 그림(IMAGE/*.png)을 실제로 보고, 빈 하늘·나무 우듬지·바위 뭉치처럼 곤충이
 // 어색하게 떠 보이는 자리를 피해서 다시 잡은 좌표다 — 숲/가로수는 그늘진 길·둥치 주변, 연못은
@@ -201,6 +156,9 @@ function InsectSpot({ species, placement, selected, isEditing, onClick, onPointe
 
 const INSECT_POSITIONS_KEY = 'little-biologist-ranch-habitat-insect-positions'
 
+// 튜토리얼 대역 버튼 위치를 회전·크기 변경 뒤에 다시 재는 시점(즉시 잰 다음).
+const RECT_REMEASURE_DELAYS_MS = [250, 850]
+
 function loadInsectPositionOverrides() {
   try {
     return JSON.parse(localStorage.getItem(INSECT_POSITIONS_KEY) ?? '{}')
@@ -241,7 +199,18 @@ export default function RanchHabitat() {
   const [isZoneBannerOpen, setIsZoneBannerOpen] = useState(false)
   const [bannerZoneName, setBannerZoneName] = useState(zoneName)
   const [positionOverrides, setPositionOverrides] = useState(loadInsectPositionOverrides)
+  // 입장 연출 상태 — entered는 제자리로 들어오기 시작했는지, entryDone은 다 들어와서 버튼 위치를
+  // 재도 되는지다. 서식지가 바뀌면 렌더 중에 처음 상태로 되돌린다(effect에서 되돌리면 첫 마운트 값까지
+  // 덮어써서, 처음부터 들어온 상태로 시작해야 하는 경우를 막는다).
   const [entered, setEntered] = useState(false)
+  const [entryDone, setEntryDone] = useState(false)
+  const [entrySceneId, setEntrySceneId] = useState(scene.id)
+  if (entrySceneId !== scene.id) {
+    setEntrySceneId(scene.id)
+    setEntered(false)
+    setEntryDone(false)
+  }
+  const [loadedImage, setLoadedImage] = useState(null)
   const layerRef = useRef(null)
   const draggingRef = useRef(null)
   const stageToggleButtonRef = useRef(null)
@@ -252,23 +221,50 @@ export default function RanchHabitat() {
     setSelectedSpeciesId(null)
     setIsEditing(false)
     draggingRef.current = null
-
-    // 대객체 입장 시 확대되며 나타나는 전환 효과. 초기 프레임을 축소 상태로 렌더한 뒤
-    // 다음 프레임에 확대 상태로 바꿔야 브라우저가 전환을 실제로 애니메이션한다.
-    setEntered(false)
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)))
-    return () => cancelAnimationFrame(id)
   }, [scene.id])
 
-  // 대객체 입장 시 존 이름을 알려주는 배너 효과 (파티클 + 확대되는 이름).
+  const currentImage = scene.images[stage] ?? scene.images[0]
+  // 그림이 오기 전에 입장을 시작하면 바탕 그라디언트만 들어오다가 그림이 툭 나타난다 — 그림이
+  // 준비된 뒤(아무리 늦어도 700ms 뒤)에 입장을 시작한다.
+  const imageReady = useImagesReady([currentImage], { timeoutMs: 700 })
+  // 배경 img는 받은 뒤에 opacity를 올려야 transition-opacity가 늦게 온 그림에도 실제로 걸린다.
+  // 이미 받아 둔 그림이면 첫 렌더부터 보인다.
+  const isBackgroundShown = loadedImage === currentImage || isImageReady(currentImage)
+
+  // 대객체 입장 시 살짝 크게 보였다가 제자리로 들어오는 전환 효과. 시작 상태가 한 번 그려진 뒤에
+  // 바꿔야 브라우저가 전환을 실제로 애니메이션한다 — 그림이 이미 준비돼 있으면 이 effect가 첫
+  // 페인트 전에 돌 수 있어서 rAF를 두 번 기다린다.
+  useEffect(() => {
+    if (entered || !imageReady) return undefined
+    let innerId = 0
+    const outerId = requestAnimationFrame(() => {
+      innerId = requestAnimationFrame(() => setEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(outerId)
+      cancelAnimationFrame(innerId)
+    }
+  }, [entered, imageReady])
+
+  // transitionend가 오지 않는 경우(탭이 가려져 있었다 등)에도 입장이 끝난 것으로 본다(전환 520ms + 여유).
+  useEffect(() => {
+    if (!entered || entryDone) return undefined
+    const id = window.setTimeout(() => setEntryDone(true), 600)
+    return () => window.clearTimeout(id)
+  }, [entered, entryDone])
+
+  // 대객체 입장 시 존 이름을 알려주는 배너 효과 (파티클 + 확대되는 이름). 장면이 들어오기 시작한 뒤에 연다.
   useEffect(() => {
     setBannerZoneName(zoneName)
     setIsZoneBannerOpen(false)
+    if (!entered) return undefined
     const id = window.setTimeout(() => setIsZoneBannerOpen(true), 80)
     return () => window.clearTimeout(id)
-  }, [scene.id, zoneName])
+  }, [scene.id, zoneName, entered])
 
-  const currentImage = scene.images[stage] ?? scene.images[0]
+  // 배너는 onClose가 바뀔 때마다 2.1초 타이머를 새로 건다 — 곤충을 누를 때마다 다시 렌더되면서
+  // 배너가 사라지지 않던 문제가 있어서 함수를 고정한다.
+  const closeZoneBanner = useCallback(() => setIsZoneBannerOpen(false), [])
   const currentDescription = scene.descriptions?.[stage] ?? scene.description
   const progressLabel = isSequence ? `${stage + 1} / ${scene.images.length}` : '1 / 1'
   // getHabitatStats에 정적 종 목록만 넘기면(하이드레이션 전) 실제 등록 상태가 아니라 항상
@@ -299,15 +295,31 @@ export default function RanchHabitat() {
   // 이 버튼을 감싼 상단 바(z-10, position:relative)가 그 자체로 stacking context라, 안에서
   // z-index를 아무리 올려도 튜토리얼 전역 락(z-100, 'insect' 단계에서 켜져 있음)을 못 이긴다 —
   // RanchBackButton과 같은 이유라 같은 방식(body에 직접 붙는 portal)으로 빠져나온다.
+  // 진짜 버튼은 입장 래퍼(확대 상태로 시작) 안에 있어서, 입장이 끝나기 전에 재면 자리가 어긋난다.
   useEffect(() => {
-    if (!targetSpeciesRequiresOtherStage) return
+    if (!targetSpeciesRequiresOtherStage || !entryDone) return undefined
     const updateRect = () => {
       if (stageToggleButtonRef.current) setStageToggleRect(stageToggleButtonRef.current.getBoundingClientRect())
     }
+    // 홈 화면 앱은 회전 뒤 StandaloneViewportFix가 0/250/800ms에 화면 밀림을 되돌리므로, 그 뒤에도 다시 잰다.
+    const timers = new Set()
+    const handleResize = () => {
+      updateRect()
+      for (const delay of RECT_REMEASURE_DELAYS_MS) {
+        const id = window.setTimeout(() => {
+          timers.delete(id)
+          updateRect()
+        }, delay)
+        timers.add(id)
+      }
+    }
     updateRect()
-    window.addEventListener('resize', updateRect)
-    return () => window.removeEventListener('resize', updateRect)
-  }, [targetSpeciesRequiresOtherStage, stage])
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      timers.forEach((id) => window.clearTimeout(id))
+    }
+  }, [targetSpeciesRequiresOtherStage, stage, entryDone])
 
   useEffect(() => {
     reportMissionEvent({ type: 'habitat_population', value: registeredSpecies.length })
@@ -368,11 +380,12 @@ export default function RanchHabitat() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-ink-950 text-white">
+    // 바탕색: tailwind에 ink-950이 없어 bg-ink-950은 생성되지 않는다(입장 중 아이보리 테두리가 비쳤다).
+    <div className="relative min-h-screen overflow-hidden bg-[#0F1F17] text-white">
       <ZoneBannerOverlay
         zoneName={bannerZoneName}
         isOpen={isZoneBannerOpen}
-        onClose={() => setIsZoneBannerOpen(false)}
+        onClose={closeZoneBanner}
       />
 
       <div
@@ -380,9 +393,13 @@ export default function RanchHabitat() {
         // 만든다 — 입장 애니메이션이 끝난 뒤에도 이 상태가 계속 유지되면, 이 안의 튜토리얼
         // 타깃(관찰할 곤충)이 아무리 z-index를 올려도 튜토리얼 오버레이보다 위로 못 올라가
         // 클릭이 막힌다. 다 들어온 뒤에는 scale 유틸리티 자체를 빼서 transform을 없앤다.
-        className={`absolute inset-0 origin-center transition-all duration-500 ease-out ${
-          entered ? 'opacity-100' : 'scale-90 opacity-0'
+        // 화면보다 크게(1.06) 시작해서 줄어드는 동안에도 가장자리에 바탕이 드러나지 않는다.
+        className={`absolute inset-0 origin-center transition-[transform,opacity] duration-[520ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          entered ? 'opacity-100' : 'scale-[1.06] opacity-0'
         }`}
+        onTransitionEnd={(event) => {
+          if (entered && event.target === event.currentTarget && event.propertyName === 'opacity') setEntryDone(true)
+        }}
       >
       {/* 배경+곤충 배치는 하나의 "세계"로 묶어서 RanchCamera로 드래그(팬)/줌 할 수 있게 한다.
           상단 버튼줄과 정보 패널은 화면에 고정되어야 해서 RanchCamera 밖(형제)에 둔다. */}
@@ -393,7 +410,10 @@ export default function RanchHabitat() {
           src={currentImage}
           alt=""
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover opacity-95 transition-opacity duration-700"
+          onLoad={() => setLoadedImage(currentImage)}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+            isBackgroundShown ? 'opacity-95' : 'opacity-0'
+          }`}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/35 to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_42%)]" />

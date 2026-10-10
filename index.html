@@ -19,9 +19,131 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Jua&display=swap" rel="stylesheet" />
     <title>리틀 바이올로지스트</title>
+    <!-- 첫 화면 브리지(.lb-boot): JS가 받아지는 동안 흰 화면 대신 게임 로딩 장면을 보여 준다.
+         React의 Suspense 대기 화면(GameLoadingScreen)과 목장 준비 커튼(RanchSceneCurtain)도 같은 마크업을
+         쓰므로 모양은 여기 한 곳에서만 정한다. html·body 배경은 칠하지 않는다 — 칠하면 아이폰 가로
+         화면(viewport-fit=cover)의 노치·안전 영역 색이 바뀐다(docs/devlog 004·005). -->
+    <style>
+      .lb-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 16px;
+        background: linear-gradient(#BFE3F5, #DCEFC7);
+        font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      }
+      /* 알과 문구는 조금 늦게 나타난다 — 짧은 대기에서 알이 번쩍 나타났다 사라지지 않게. */
+      .lb-boot__stage {
+        position: relative;
+        width: 56px;
+        height: 84px;
+        animation: lb-boot-in 200ms ease-out 150ms backwards;
+      }
+      .lb-boot__egg {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 56px;
+        height: 70px;
+        border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        background:
+          radial-gradient(ellipse at 32% 24%, rgba(255, 255, 255, 0.95) 0 6px, transparent 7px),
+          radial-gradient(circle at 63% 44%, #A9D18E 0 4px, transparent 4.5px),
+          radial-gradient(circle at 37% 63%, #A9D18E 0 3px, transparent 3.5px),
+          radial-gradient(circle at 67% 73%, #A9D18E 0 2.5px, transparent 3px),
+          #FFF6DC;
+        box-shadow: inset -6px -8px 0 rgba(214, 186, 128, 0.38);
+        animation: lb-boot-bob 900ms ease-in-out 150ms infinite alternate backwards;
+      }
+      .lb-boot__shadow {
+        position: absolute;
+        left: 8px;
+        bottom: 0;
+        width: 40px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(63, 98, 18, 0.2);
+        animation: lb-boot-shadow 900ms ease-in-out 150ms infinite alternate backwards;
+      }
+      .lb-boot__text {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #3F6212;
+        animation: lb-boot-in 200ms ease-out 400ms backwards;
+      }
+      .lb-boot__bar {
+        display: block;
+        width: 132px;
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(63, 98, 18, 0.16);
+        animation: lb-boot-in 200ms ease-out 700ms backwards;
+      }
+      .lb-boot__bar-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #9BCB88, #5B9C4D);
+        transform-origin: left center;
+        transition: transform 300ms ease-out;
+      }
+      @keyframes lb-boot-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes lb-boot-bob {
+        from { transform: translateY(0); }
+        to { transform: translateY(-10px); }
+      }
+      @keyframes lb-boot-shadow {
+        from { transform: scaleX(1); opacity: 1; }
+        to { transform: scaleX(0.78); opacity: 0.6; }
+      }
+      /* 모션 줄이기: 통통 튀기와 페이드는 끈다. 등장 지연은 깜빡임 방지용이라 남긴다. */
+      @media (prefers-reduced-motion: reduce) {
+        .lb-boot__egg,
+        .lb-boot__shadow {
+          animation: none;
+        }
+        .lb-boot__stage,
+        .lb-boot__text,
+        .lb-boot__bar {
+          animation-duration: 1ms;
+        }
+        .lb-boot__bar-fill {
+          transition: none;
+        }
+      }
+    </style>
+    <script>
+      // 첫 화면 그림 1장을 JS보다 먼저 받기 시작한다. 로그인 정보가 남아 있으면(AuthContext.jsx의
+      // STORAGE_KEY, 앱·홈 화면 앱은 localStorage, 브라우저 탭은 sessionStorage) 목장 배경, 아니면
+      // 로그인 배경. 다른 요청과 다투지 않게 fetchpriority는 주지 않는다.
+      (function () {
+        try {
+          var key = 'little-biologist-auth'
+          var signedIn = Boolean(window.localStorage.getItem(key) || window.sessionStorage.getItem(key))
+          var link = document.createElement('link')
+          link.rel = 'preload'
+          link.as = 'image'
+          link.href = signedIn ? '/ranch/background.webp' : '/images/login/로그인.webp'
+          document.head.appendChild(link)
+        } catch (error) {
+          // 저장소를 못 읽는 환경(사파리 개인정보 보호 모드 등)에서는 미리받기만 건너뛴다.
+        }
+      })()
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- React가 처음 그릴 때 #root 안의 스플래시를 자기 화면으로 바꾼다. id는 GameLoadingScreen이
+         애니메이션 박자를 이어받을 때 찾는다. -->
+    <div id="root"><div id="lb-boot-static" class="lb-boot" role="status" aria-live="polite"><div class="lb-boot__stage" aria-hidden="true"><span class="lb-boot__egg"></span><span class="lb-boot__shadow"></span></div><p class="lb-boot__text">목장 문을 여는 중이에요</p></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

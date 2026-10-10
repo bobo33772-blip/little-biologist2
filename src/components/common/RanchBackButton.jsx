@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTutorial } from '../../context/TutorialContext'
+import { prefetchRoute, routeKeyForPath } from '../../router/routeChunks'
+
+// 튜토리얼 대역 버튼 위치를 회전·크기 변경 뒤에 다시 재는 시점(즉시 잰 다음).
+const RECT_REMEASURE_DELAYS_MS = [250, 850]
 
 // AGENTS.md §11: 집중형 화면에서 전체 사이드바를 임의로 복원하지 않는다.
 // screen-requirements.md: 도감/퀘스트 등은 '목장으로 돌아가기' 중심의 집중형 내비게이션을 사용한다.
@@ -22,13 +26,35 @@ export default function RanchBackButton({ to = '/ranch', label = '목장으로 �
   // 때문에 버튼에 아무리 z-index를 줘도 바깥 튜토리얼 락을 못 이긴다. body에 직접 붙는 portal로
   // 완전히 빠져나와서, 화면을 막는 레이어와 실제로 눌리는 버튼(진짜 버튼과 같은 자리)을 같이 그린다.
   useEffect(() => {
-    if (!isTutorialReturnStep) return
+    if (!isTutorialReturnStep) return undefined
     const updateRect = () => {
       if (buttonRef.current) setDecoyRect(buttonRef.current.getBoundingClientRect())
     }
+    // 첫 측정은 화면이 아직 자리 잡는 중일 수 있어서 두 프레임 뒤에 한 번 더 잰다. 회전·크기 변경 때는
+    // 즉시 재고, 홈 화면 앱의 StandaloneViewportFix가 0/250/800ms에 밀림을 되돌린 뒤에도 다시 잰다.
+    const timers = new Set()
+    let innerFrame = 0
+    const outerFrame = requestAnimationFrame(() => {
+      innerFrame = requestAnimationFrame(updateRect)
+    })
+    const handleResize = () => {
+      updateRect()
+      for (const delay of RECT_REMEASURE_DELAYS_MS) {
+        const id = window.setTimeout(() => {
+          timers.delete(id)
+          updateRect()
+        }, delay)
+        timers.add(id)
+      }
+    }
     updateRect()
-    window.addEventListener('resize', updateRect)
-    return () => window.removeEventListener('resize', updateRect)
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      cancelAnimationFrame(outerFrame)
+      cancelAnimationFrame(innerFrame)
+      timers.forEach((id) => window.clearTimeout(id))
+    }
   }, [isTutorialReturnStep])
 
   function handleClick() {
@@ -36,11 +62,17 @@ export default function RanchBackButton({ to = '/ranch', label = '목장으로 �
     navigate(to)
   }
 
+  // 기능 화면 주소를 바로 열어 목장 JS를 아직 안 받은 경우를 위해, 누르는 순간 받기 시작한다.
+  function handlePointerDown() {
+    prefetchRoute(routeKeyForPath(to))
+  }
+
   return (
     <>
       <button
         type="button"
         ref={buttonRef}
+        onPointerDown={handlePointerDown}
         onClick={handleClick}
         className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-900 shadow-card hover:bg-ivory-100"
       >
@@ -54,6 +86,7 @@ export default function RanchBackButton({ to = '/ranch', label = '목장으로 �
           <div className="pointer-events-auto fixed inset-0 z-[95]" aria-hidden="true">
             <button
               type="button"
+              onPointerDown={handlePointerDown}
               onClick={handleClick}
               className="relative flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-900 shadow-card hover:bg-ivory-100"
               style={{

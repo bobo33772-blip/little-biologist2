@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './router/AuthContext'
 import { CurrencyProvider } from './context/CurrencyContext'
@@ -7,41 +7,53 @@ import { RegisteredPhotosProvider } from './context/RegisteredPhotosContext'
 import { QuestsProvider } from './context/QuestsContext'
 import { TutorialProvider } from './context/TutorialContext'
 import ProtectedRoute from './router/ProtectedRoute'
+import { routes } from './router/routeChunks'
 import GrowthStageModal from './components/common/GrowthStageModal'
 import BackgroundMusicController from './components/common/BackgroundMusicController'
 import ButtonSoundController from './components/common/ButtonSoundController'
 import SoundAssetPreloader from './components/common/SoundAssetPreloader'
-import LoadingOverlay from './components/common/LoadingOverlay'
+import GameLoadingScreen from './components/common/GameLoadingScreen'
 import AndroidBackButtonHandler from './components/common/AndroidBackButtonHandler'
 import RotateDeviceOverlay from './components/common/RotateDeviceOverlay'
 import StandaloneViewportFix from './components/common/StandaloneViewportFix'
 
 import AuthRouteLayout from './pages/auth/AuthRouteLayout'
 
-// 라우트 단위 코드 스플리팅: 접속한 화면의 JS만 받아오도록 페이지를 전부 지연 로드한다.
-// (예: /login만 열어도 목장·상점·퀴즈 등 다른 페이지 JS까지 같이 받아오는 걸 막는다.)
-const Login = lazy(() => import('./pages/auth/Login'))
-const Signup = lazy(() => import('./pages/auth/Signup'))
-const Ranch = lazy(() => import('./pages/Ranch'))
-const RanchHabitat = lazy(() => import('./pages/RanchHabitat'))
-const Exploration = lazy(() => import('./pages/Exploration'))
-const FieldGuide = lazy(() => import('./pages/FieldGuide'))
-const Quests = lazy(() => import('./pages/Quests'))
-const Friends = lazy(() => import('./pages/Friends'))
-const FriendRanch = lazy(() => import('./pages/FriendRanch'))
-const FriendRanchHabitat = lazy(() => import('./pages/FriendRanchHabitat'))
-const FriendFieldGuide = lazy(() => import('./pages/FriendFieldGuide'))
-const Shop = lazy(() => import('./pages/Shop'))
-const Bag = lazy(() => import('./pages/Bag'))
-const AiCompanion = lazy(() => import('./pages/AiCompanion'))
-const Quiz = lazy(() => import('./pages/Quiz'))
-const Profile = lazy(() => import('./pages/Profile'))
+// 라우트 단위 코드 스플리팅과 미리받기는 router/routeChunks.js 한 곳에서 관리한다.
+const {
+  login: Login,
+  signup: Signup,
+  ranch: Ranch,
+  ranchHabitat: RanchHabitat,
+  exploration: Exploration,
+  fieldGuide: FieldGuide,
+  quests: Quests,
+  friends: Friends,
+  friendRanch: FriendRanch,
+  friendRanchHabitat: FriendRanchHabitat,
+  friendFieldGuide: FriendFieldGuide,
+  shop: Shop,
+  bag: Bag,
+  aiCompanion: AiCompanion,
+  quiz: Quiz,
+  profile: Profile,
+} = routes
 
 // 첫 주소(/)는 로그인 상태에 따라 나눈다. 앱(Capacitor)과 홈 화면 웹 앱은 항상 /에서 시작하는데,
 // 로그인을 기기에 유지해도 무조건 /login으로 보내면 열 때마다 로그인 화면이 떠서 유지가 의미 없어진다.
 function RootRedirect() {
   const { isAuthenticated } = useAuth()
-  return <Navigate to={isAuthenticated ? '/ranch' : '/login'} replace />
+  // 곧 그릴 첫 화면의 청크를 Navigate가 커밋되기 전에 받기 시작한다(이미 받는 중이면 같은 요청을 쓴다).
+  if (isAuthenticated) routes.ranch.preload().catch(() => {})
+  else routes.login.preload().catch(() => {})
+  // Navigate는 아무것도 그리지 않고 effect에서 이동하므로, 그 사이 한 프레임이 빈 아이보리 화면이 된다.
+  // index.html 스플래시와 같은 로딩 장면을 함께 그려 다음 대기 화면으로 끊김 없이 넘긴다.
+  return (
+    <>
+      <GameLoadingScreen />
+      <Navigate to={isAuthenticated ? '/ranch' : '/login'} replace />
+    </>
+  )
 }
 
 export default function App() {
@@ -59,7 +71,8 @@ export default function App() {
       <AndroidBackButtonHandler />
       <RotateDeviceOverlay />
       <StandaloneViewportFix />
-      <Suspense fallback={<LoadingOverlay />}>
+      {/* 화면 JS를 기다리는 동안은 스피너 대신 index.html 스플래시와 같은 게임 로딩 장면을 보여 준다. */}
+      <Suspense fallback={<GameLoadingScreen />}>
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route element={<AuthRouteLayout />}>

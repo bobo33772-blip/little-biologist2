@@ -6,6 +6,7 @@ import { useAuth } from '../../router/AuthContext'
 import { useCurrency } from '../../context/CurrencyContext'
 import { useQuests } from '../../context/QuestsContext'
 import { GROWTH_MAX } from '../../data/representativeCharacter'
+import { prefetchRoute } from '../../router/routeChunks'
 
 // screen-requirements.md §1: 공통 UI는 프로필, 레벨, 성장 게이지, 나뭇잎, 알림, 설정을 포함할 수 있다.
 export default function AppHeader({ leftSlot }) {
@@ -21,6 +22,8 @@ export default function AppHeader({ leftSlot }) {
         {leftSlot}
         <button
           type="button"
+          // 누르는 순간 갈 화면 JS를 받기 시작해 첫 진입 스피너를 줄인다(이미 받았으면 아무 일도 없다).
+          onPointerDown={() => prefetchRoute('profile')}
           onClick={() => navigate('/profile')}
           className="flex min-w-0 items-center gap-2 rounded-full px-1 py-1 hover:bg-ivory-100"
         >
@@ -57,7 +60,7 @@ export default function AppHeader({ leftSlot }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <CurrencyDisplay amount={leaves} onAdd={() => navigate('/shop')} />
+        <CurrencyDisplay amount={leaves} onAdd={() => navigate('/shop')} onPointerDown={() => prefetchRoute('shop')} />
         <button
           type="button"
           aria-label="알림"
@@ -69,6 +72,7 @@ export default function AppHeader({ leftSlot }) {
         <button
           type="button"
           aria-label="설정"
+          onPointerDown={() => prefetchRoute('profile')}
           onClick={() => navigate('/profile/edit')}
           className="ranch-top-icon-button"
         >
