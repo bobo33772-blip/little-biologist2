@@ -5466,6 +5466,37 @@ body {
   height: 62px !important;
 }
 
+/* 폰에서는 알림·설정 타일을 줄인다. 위 규칙들은 화면 크기와 상관없이 버튼 76px(보이는 타일 약 57px)이라
+   폰 가로 화면(높이 360~430px)에서 화면 높이의 18~21%를 차지하고 오른쪽 위 나무와 울타리를 가렸다.
+   - 조건은 폰 가로(높이 500px 이하, tailwind `short`와 같다) + 폰 세로(폭 600px 이하, RotateDeviceOverlay의
+     폰 세로 기준과 같다). 태블릿·PC는 그대로다. 높이 500px 이하로 줄인 PC 창도 `short`처럼 폰 모양이 된다.
+   - 보이는 타일 높이를 40px로 맞춘다. 알림 그림은 200px 캔버스 안 타일이 155px(77.5%)이고 설정 그림은
+     타일이 거의 꽉 찬 200x185라서, 그림 크기를 각각 40/0.775, 40/0.925로 나눠 두 타일 높이를 같게 한다.
+   - 버튼(누르는 영역)은 알림 그림이 들어가는 52px. 아이 손가락 기준(44~48px)보다 크고, 왼쪽 위 프로필
+     카드 높이(52px)와 같아 위쪽 줄이 가지런하다. 버튼이 그림보다 작으면 그림이 위로 붙어 두 타일 높이가 어긋났다.
+   - 기본 스타일의 img max-width:100%가 알림 그림을 버튼 폭으로 줄이지 않게 max-width를 푼다. */
+@media (orientation: landscape) and (max-height: 500px), (orientation: portrait) and (max-width: 600px) {
+  .ranch-top-tools {
+    gap: 0 !important;
+  }
+
+  .ranch-top-icon-button {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .ranch-top-icon-button[aria-label="알림"] img {
+    width: 51.6px !important;
+    height: 51.6px !important;
+    max-width: none !important;
+  }
+
+  .ranch-top-icon-button[aria-label="설정"] img {
+    width: 43.2px !important;
+    height: 43.2px !important;
+  }
+}
+
 /* 안전 영역 피하기(목장 화면 가장자리 UI). 이 파일 앞쪽에는 같은 클래스 규칙이 화면 크기별로
    여러 번 나오므로, 위치값(left/right/bottom)은 그 규칙들에 그대로 맡기고 맨 끝에서 margin으로
    안전 영역만큼만 더 민다. 노치·홈 바가 없는 화면에서는 margin이 0이라 위치가 바뀌지 않는다. */
