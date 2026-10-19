@@ -5,7 +5,7 @@
 - 계기
   - 사용자 요청: "알람 로고랑 환경설정 로고가 핸드폰에서 보면 좀 크다. 배경을 해치지 않을 정도로 조정해 달라."
   - [006](006-game-scene-transitions.md)을 main에 합치기 직전에 함께 처리했다.
-- 관련 커밋: `(커밋 후 채움)` style(ui): shrink the alarm and settings icons on phones
+- 관련 커밋: `5ee7518` style(ui): shrink the alarm and settings icons on phones
 
 ## 1. 배경
 
