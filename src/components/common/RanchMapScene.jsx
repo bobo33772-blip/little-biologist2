@@ -2,6 +2,10 @@ import { useRef } from 'react'
 import RanchPaths from './RanchPaths'
 import { getWeatherParticleCount } from '../../api/weather.js'
 import { useTutorial } from '../../context/TutorialContext'
+import { prefetchRoute } from '../../router/routeChunks'
+import { HABITAT_SCENES } from '../../data/habitatScenes'
+import { decodeImage } from '../../hooks/useImagesReady'
+import { playTapPop } from '../../utils/motion'
 
 const CLOUDY_IMAGES = [
   { src: new URL('../../../IMAGE/날씨 반영/구름 많음1.png', import.meta.url).href, className: 'ranch-weather-cloud--one' },
@@ -48,6 +52,8 @@ export default function RanchMapScene({
   onSelect,
   onSelectEdit,
   onPositionChange,
+  // 서식지를 눌렀을 때 갈 화면의 청크 키(routeChunks.js). 친구 목장은 친구 서식지 화면으로 간다.
+  habitatRouteKey = 'ranchHabitat',
 }) {
   const { step, targetHabitatId } = useTutorial()
   const sceneRef = useRef(null)
@@ -138,12 +144,19 @@ export default function RanchMapScene({
           <button
             key={h.id}
             type="button"
-            onClick={() => {
+            onClick={(event) => {
               if (isEditing) onSelectEdit?.(h.id)
-              else onSelect?.(h)
+              else onSelect?.(h, event)
             }}
             onPointerDown={(event) => {
-              if (!isEditing) return
+              if (!isEditing) {
+                // 서식지를 누르려는 순간 서식지 화면 JS와 장면 그림을 받기 시작한다(이미 받았으면 아무 일도 없다).
+                prefetchRoute(habitatRouteKey)
+                decodeImage(HABITAT_SCENES[h.id]?.images[0])
+                // 누른 손맛은 그림에만 준다 — 버튼에 transform을 걸면 튜토리얼 타깃(z-[110])이 갇힌다.
+                playTapPop(event.currentTarget.querySelector('img'))
+                return
+              }
               event.preventDefault()
               event.stopPropagation()
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -158,8 +171,13 @@ export default function RanchMapScene({
               src={h.image}
               alt=""
               aria-hidden="true"
+              // 그림이 오기 전에도 폭(objectSizeStyle)과 이 비율로 높이를 미리 잡아 이름표가 밀리지 않게 한다.
+              // height:'auto'를 함께 둬야 height 속성이 고정 높이로 쓰이지 않고 비율로만 쓰인다.
+              width={h.imageWidth}
+              height={h.imageHeight}
               style={{
                 ...objectSizeStyle(h.id),
+                height: 'auto',
                 transform: `scale(${scale})`,
                 transformOrigin: 'center bottom',
               }}

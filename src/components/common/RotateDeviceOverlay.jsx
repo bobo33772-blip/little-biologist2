@@ -30,7 +30,7 @@ export default function RotateDeviceOverlay() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="rotate-device-title"
-      className="fixed inset-0 z-[2000] flex flex-col items-center justify-center gap-4 bg-ivory-50 px-8 text-center"
+      className="lb-fade-in fixed inset-0 z-[2000] flex flex-col items-center justify-center gap-4 bg-ivory-50 px-8 text-center"
     >
       <img src="/app-icons/icon-192.png" alt="" className="h-20 w-20 rounded-3xl shadow-card" />
       <span className="flex items-center gap-2 text-leaf-600" aria-hidden="true">

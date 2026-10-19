@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import MainLayout from '../components/common/MainLayout'
 import RanchMapScene from '../components/common/RanchMapScene'
@@ -6,10 +6,12 @@ import PlacedItemsLayer from '../components/common/PlacedItemsLayer'
 import RanchCamera from '../components/common/RanchCamera'
 import RandomInsectEffect from '../components/common/RandomInsectEffect'
 import EggFirstRevealEffect from '../components/common/EggFirstRevealEffect'
+import RanchSceneCurtain from '../components/common/RanchSceneCurtain'
+import ArrivalVeil from '../components/common/ArrivalVeil'
 import AnnouncementBoard from '../components/common/AnnouncementBoard'
 import { fetchRanchWeather, WEATHER_REFRESH_MS } from '../api/weather'
 import { mockUser } from '../data/mockData'
-import { HABITATS, getHabitatStats, getInsectSpecies, DEMO_ACCOUNT_USERNAME } from '../data/insectSpecies'
+import { HABITATS, RANCH_SCENE_IMAGES, getHabitatStats, getInsectSpecies, DEMO_ACCOUNT_USERNAME } from '../data/insectSpecies'
 import { getRepresentativeCharacterImage, getOwnedRepresentativeCharacters, GROWTH_MAX } from '../data/representativeCharacter'
 import { useAuth } from '../router/AuthContext'
 import { useBag } from '../context/BagContext'
@@ -22,9 +24,18 @@ import { isQuizCompletedToday } from '../utils/quizAvailability'
 import { fetchUserState, saveUserState } from '../api/userState'
 import ResultModal from '../components/common/ResultModal'
 import { apiUrl } from '../api/base'
+import { prefetchRoute, prefetchRoutesInIdle, routeKeyForPath } from '../router/routeChunks'
+import { markSceneReady, whenSceneReady } from '../utils/sceneReady'
+import useImagesReady, { decodeImage, useImageLoadProgress } from '../hooks/useImagesReady'
+import { HABITAT_SCENES } from '../data/habitatScenes'
+import { useSceneRevealed, useSceneTransition } from '../components/transition/SceneTransitionProvider'
+import { getRanchLayout, getRecentHabitatExit, rememberRanchLayout } from '../utils/sceneMemory'
+import { IRIS, SCENE_TRANSITIONS_ENABLED, playTapPop } from '../utils/motion'
 
 // 위치 권한을 못 받거나 실패했을 때 쓰는 기본 좌표(서울 시청).
 const DEFAULT_LOCATION = { latitude: 37.5665, longitude: 126.978 }
+// 지도 안 img 중 장면 그림(대객체)을 고를 때 쓴다(배경·흙길은 CSS 배경이라 img가 아니다).
+const RANCH_SCENE_IMAGE_SET = new Set(RANCH_SCENE_IMAGES)
 
 function WeatherBadge({ weather, visible, onToggle }) {
   const label = weather?.status === 'loading'
@@ -100,6 +111,15 @@ export default function Ranch() {
     selectProfileCharacter,
   } = useQuests()
   const { step, advance, restart, openIfNeeded, targetHabitatId } = useTutorial()
+  // 튜토리얼 habitat 단계가 막 시작된 직후의 서식지 탭은 무시한다. 도감의 '목장으로 돌아가기'를 연타하면
+  // 두 번째 탭이 같은 자리에 있는 대상 서식지(z-[110])에 맞아 단계를 하나 건너뛰었다(대상이 흙 속일 때 재현).
+  const habitatStepStartedAtRef = useRef(0)
+  useEffect(() => {
+    if (step?.id === 'habitat') habitatStepStartedAtRef.current = performance.now()
+  }, [step?.id])
+  const { go: goScene, markReady: markSceneTransitionReady, revealOriginRef, arrivedVia, lastRevealAt } = useSceneTransition()
+  const isTransitionRevealed = useSceneRevealed()
+  const rootRef = useRef(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [equippedTitleIds, setEquippedTitleIds] = useState([])
@@ -133,6 +153,28 @@ export default function Ranch() {
     temperature: null,
   })
   const weatherCoordsRef = useRef(DEFAULT_LOCATION)
+  // 목장 그림(배경 + 흙길 + 대객체)이 다 준비됐는지. 준비될 때까지 목장 준비 커튼으로 덮는다.
+  // 상한 8초: 느린 회선(약 1.6Mbps)에서 4초로 두면 커튼이 먼저 걷히고 그림이 하나씩 붙는 조립
+  // 과정이 그대로 보였다(실측). 오래 걸리면 커튼에 진행 막대가 나타난다.
+  const sceneReady = useImagesReady(RANCH_SCENE_IMAGES, { timeoutMs: 8000 })
+  const sceneProgress = useImageLoadProgress(RANCH_SCENE_IMAGES)
+  const isSceneFullyLoaded = sceneProgress.loaded >= sceneProgress.total
+  // 커튼이 걷혀 DOM에서 빠졌는지. 첫 렌더에 이미 준비돼 있으면(다시 방문) 커튼을 아예 그리지 않는다.
+  // 알 공개·튜토리얼·랜덤곤충처럼 커튼 아래에서 먼저 시작하면 안 되는 연출은 이 값 뒤로 미룬다.
+  const [isSceneRevealed, setIsSceneRevealed] = useState(sceneReady)
+  const handleCurtainGone = useCallback(() => setIsSceneRevealed(true), [])
+  // 서식지에서 원형 커튼으로 덮인 채 도착했는지(처음 렌더 기준). 이때는 목장 준비 커튼을 겹쳐 띄우지 않고,
+  // 원형 커튼이 걷히기 시작하면 장면이 드러난 것으로 본다.
+  const [arrivedUnderCurtain] = useState(() => arrivedVia === 'iris' && !isTransitionRevealed)
+  if (arrivedUnderCurtain && isTransitionRevealed && !isSceneRevealed) setIsSceneRevealed(true)
+  // 도착 페이드(ArrivalVeil)는 처음 그릴 때 한 번만 정한다. 목장 준비 커튼이 뜨는 경우(그림이 아직 없음)와
+  // 원형 커튼으로 막 도착한 경우는 이미 덮였다가 걷히는 연출이 있으니 겹쳐 하지 않는다.
+  const [arrivalVeilAtMount] = useState(() => (
+    SCENE_TRANSITIONS_ENABLED &&
+    sceneReady &&
+    arrivedVia !== 'iris' &&
+    performance.now() - lastRevealAt > IRIS.arrivedHoldMs
+  ))
 
   function handleSideNavigation(item) {
     if (item.to === '/quiz' && isQuizCompletedToday(user?.uid)) {
@@ -169,19 +211,68 @@ export default function Ranch() {
 
   // 아직 튜토리얼을 안 끝낸 계정이 목장에 들어오면(배치 편집 진입이 아닌 경우) 잠깐 뒤에 띄운다 —
   // 다른 화면 상태가 먼저 자리 잡은 뒤에 나타나야 튜토리얼 카드가 덜컥거리지 않는다.
+  // 목장 준비 커튼이 걷힌 뒤부터 센다(커튼 아래에서 튜토리얼 카드가 먼저 뜨지 않게).
   useEffect(() => {
-    if (location.state?.editPlacementId) return
+    if (location.state?.editPlacementId || !isSceneRevealed) return
     const id = window.setTimeout(() => {
       openIfNeeded()
     }, 300)
     return () => window.clearTimeout(id)
-  }, [location.state?.editPlacementId, openIfNeeded])
+  }, [location.state?.editPlacementId, openIfNeeded, isSceneRevealed])
+
+  // 첫 장면이 다 그려졌다는 신호 — 효과음·배경음과 다른 화면 JS 미리받기가 이 뒤에 시작한다.
+  // 커튼이 상한(8초)에 걸려 먼저 걷혔으면 남은 그림을 다 받은 뒤에 보낸다. 그 전에 보내면 효과음
+  // 미리받기가 아직 오는 대객체 그림과 회선을 다툰다(실측). 커튼 없이 바로 준비된 경우도 여기서 보낸다.
+  useEffect(() => {
+    if (isSceneFullyLoaded) markSceneReady()
+  }, [isSceneFullyLoaded])
+
+  // 원형 커튼 아래로 도착했다면 목장 그림이 준비됐다고 알려 커튼을 걷게 한다(커튼 쪽 상한 2.2초).
+  // 그림 파일을 미리 decode해 둬도 지도 안의 대객체 <img>는 처음 그릴 때 따로 decode해서, 첫 귀환 때
+  // 커튼이 걷힌 뒤 약 100ms 동안 대객체가 빈 채로 보였다(실측). 화면의 실제 img까지 decode된 뒤 알린다.
+  useEffect(() => {
+    if (!sceneReady) return undefined
+    let cancelled = false
+    const sceneImages = Array.from(rootRef.current?.querySelectorAll('img') ?? [])
+      .filter((img) => RANCH_SCENE_IMAGE_SET.has(img.getAttribute('src')))
+    Promise.all(sceneImages.map((img) => img.decode?.().catch(() => {}))).then(() => {
+      if (!cancelled) markSceneTransitionReady()
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [sceneReady, markSceneTransitionReady])
+
+  // 목장 장면이 다 그려지고 조금 쉰 뒤(1.5초), 여기서 갈 수 있는 화면들의 JS를 유휴 시간에 하나씩
+  // 미리 받아 둔다 — 첫 진입 때 '불러오는 중' 스피너 없이 바로 그려지게 하려는 것. 이미 받은
+  // 청크는 다시 받지 않으므로 목장에 다시 돌아와도 비용이 없다.
+  useEffect(() => {
+    let cancelled = false
+    let timer = null
+    let stopIdlePrefetch = null
+    whenSceneReady().then(() => {
+      if (cancelled) return
+      timer = window.setTimeout(() => {
+        stopIdlePrefetch = prefetchRoutesInIdle([
+          'ranchHabitat', 'fieldGuide', 'exploration', 'quests', 'bag', 'shop', 'quiz', 'friends', 'profile', 'aiCompanion',
+        ])
+      }, 1500)
+    })
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      stopIdlePrefetch?.()
+    }
+  }, [])
 
   // 대객체(서식지) 위치/크기 편집값. ranch.md: 편집 모드에서 대객체를 드래그하면 위치가 바뀌고,
   // 길(RanchPaths)은 이 좌표를 그대로 읽어서 자동으로 따라간다 — 별도 동기화 로직이 없다.
   // 계정별 진행도라 로그인한 uid 기준으로 서버(user_state)에 저장한다 — 친구가 목장 방문 시
   // 이 값을 읽어서 실제 배치를 보여준다(Friends.jsx의 /api/ranch/:uid).
+  // 다시 들어올 때는 지난번에 받아 둔 위치로 바로 그린다 — 서버 값을 기다리는 동안 기본 위치로 그렸다가
+  // 옮겨지면 대객체가 튀고, 서식지에서 돌아올 때 커튼이 접혀 들어갈 자리도 어긋난다.
   const [habitatPositions, setHabitatPositions] = useState(() => (
+    getRanchLayout(user?.uid) ??
     Object.fromEntries(HABITATS.map((habitat) => [habitat.id, { x: habitat.x, y: habitat.y }]))
   ))
   const [habitatScales, setHabitatScales] = useState(() => (
@@ -255,6 +346,23 @@ export default function Ranch() {
       if (refreshTimer) window.clearInterval(refreshTimer)
     }
   }, [])
+
+  useEffect(() => {
+    if (user?.uid) rememberRanchLayout(user.uid, habitatPositions)
+  }, [user?.uid, habitatPositions])
+
+  // 서식지에서 막 돌아왔다면 원형 커튼이 그 서식지 대객체 자리로 접혀 들어가게 화면 좌표를 넘긴다.
+  // 목장을 새로 그릴 때 카메라는 늘 원점(확대·이동 없음)이라 % 위치 × 화면 크기로 충분하다.
+  useLayoutEffect(() => {
+    const exit = getRecentHabitatExit(1500)
+    const position = exit ? habitatPositions[exit.habitatId] : null
+    const rect = rootRef.current?.getBoundingClientRect()
+    if (!position || !rect) return
+    revealOriginRef.current = {
+      x: rect.left + (position.x / 100) * rect.width,
+      y: rect.top + (position.y / 100) * rect.height,
+    }
+  }, [habitatPositions, revealOriginRef])
 
   const missionGroups = [
     { title: '일일 미션', tab: 'daily', quests: quests.daily },
@@ -343,8 +451,10 @@ export default function Ranch() {
 
   return (
     <MainLayout showHeader={false} showBottomNav={false}>
-      <div className="relative h-screen min-h-0 overflow-hidden bg-ink-950">
-        <RanchCamera>
+      <div ref={rootRef} className="relative h-screen min-h-0 overflow-hidden bg-[#0F1F17]">
+        {/* 튜토리얼이 시작되거나 단계가 바뀌면 카메라를 원점으로 되돌린다. 확대·팬한 채로 남아 있으면
+            transform이 생겨 튜토리얼 타깃(z-[110])이 그 안에 갇히고, 타깃이 화면 밖에 있을 수도 있다. */}
+        <RanchCamera resetSignal={step?.id ?? null}>
           <RanchMapScene
             habitats={HABITATS}
             stats={habitatStats}
@@ -358,11 +468,25 @@ export default function Ranch() {
               setSelectedHabitatId(id)
             }}
             onPositionChange={updateHabitatPosition}
-            onSelect={(h) => {
+            onSelect={(h, event) => {
               if (step?.id === 'habitat' && targetHabitatId && h.id !== targetHabitatId) return
-              if (step?.id === 'habitat') advance()
-              reportMissionEvent({ type: 'habitat_visit', entityId: h.id })
-              navigate(`/ranch/${h.id}`)
+              if (step?.id === 'habitat' && performance.now() - habitatStepStartedAtRef.current < 500) return
+              const rect = event?.currentTarget?.getBoundingClientRect()
+              const scene = HABITAT_SCENES[h.id]
+              // 탭한 서식지 자리에서 그 서식지 색 원이 퍼져 덮은 뒤 이동한다. 튜토리얼 진행과 미션 보고는
+              // 탭 시점이 아니라 다 덮인 순간 이동과 같은 틱에 한다(그래야 튜토리얼 자동 이동이 끼어들지 않는다).
+              goScene(`/ranch/${h.id}`, {
+                kind: 'iris',
+                origin: rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null,
+                color: scene?.coverColor,
+                label: h.name,
+                prepare: () => decodeImage(scene?.images[0]),
+                beforeNavigate: () => {
+                  if (step?.id === 'habitat') advance()
+                  reportMissionEvent({ type: 'habitat_visit', entityId: h.id })
+                },
+                source: 'user',
+              })
             }}
           />
 
@@ -377,9 +501,9 @@ export default function Ranch() {
             onPositionChange={updatePlacementPosition}
           />
 
-          {!isEditing && shouldShowRandomInsectEffect && <RandomInsectEffect />}
+          {!isEditing && shouldShowRandomInsectEffect && isSceneRevealed && <RandomInsectEffect />}
           <EggFirstRevealEffect
-            trigger={location.state?.firstLogin}
+            trigger={location.state?.firstLogin && isSceneRevealed}
             representativeCharacter={representativeCharacter}
             onActiveChange={setIsEggGrantFlowActive}
           />
@@ -506,6 +630,10 @@ export default function Ranch() {
                 </button>
                 <button
                   type="button"
+                  onPointerDown={(event) => {
+                    playTapPop(event.currentTarget.querySelector('img'))
+                    prefetchRoute('profile')
+                  }}
                   onClick={() => navigate('/profile/edit')}
                   className="ranch-top-icon-button"
                   aria-label="설정"
@@ -619,6 +747,12 @@ export default function Ranch() {
                 <button
                   key={item.to}
                   type="button"
+                  // 손가락이 닿는 순간 받기 시작하면 떼는 사이(약 100ms)만큼 청크가 먼저 도착한다.
+                  // 그림만 살짝 눌렸다 튀어나오게 한다(버튼 자체는 튜토리얼 타깃일 수 있어 transform을 걸지 않는다).
+                  onPointerDown={(event) => {
+                    playTapPop(event.currentTarget.querySelector('.ranch-hud-icon-art'))
+                    prefetchRoute(routeKeyForPath(item.to))
+                  }}
                   onClick={() => handleSideNavigation(item)}
                   className={`ranch-hud-button ranch-hud-icon ranch-hud-icon--${item.to.slice(1).replace('/', '-')}`}
                   aria-label={item.label}
@@ -639,9 +773,11 @@ export default function Ranch() {
           </>
         )}
 
+        {/* ranch-modal 카드는 portal이 아니지만 안에 fixed 자식이 없어(선택 목록은 absolute) 카드 자신에 pop을 건다.
+            fixed 자식을 넣게 되면 transform이 그 기준을 바꾸므로 카드에는 pop 대신 lb-fade-in만 쓴다. */}
         {isProfileModalOpen && (
           <div
-            className="ranch-modal-backdrop"
+            className="ranch-modal-backdrop lb-fade-in"
             role="presentation"
             onClick={() => {
               setIsProfileModalOpen(false)
@@ -650,7 +786,7 @@ export default function Ranch() {
               setIsBadgePickerOpen(false)
             }}
           >
-            <div className="ranch-modal ranch-profile-modal" role="dialog" aria-modal="true" aria-label="탐험가 정보" onClick={(event) => event.stopPropagation()}>
+            <div className="lb-pop-in ranch-modal ranch-profile-modal" role="dialog" aria-modal="true" aria-label="탐험가 정보" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="ranch-modal-close" onClick={() => setIsProfileModalOpen(false)} aria-label="닫기">×</button>
               <div className="ranch-profile-modal-hero">
                 <div className="relative">
@@ -800,8 +936,8 @@ export default function Ranch() {
         />
 
         {isGuestbookModalOpen && (
-          <div className="ranch-modal-backdrop" role="presentation" onClick={() => setIsGuestbookModalOpen(false)}>
-            <div className="ranch-modal" role="dialog" aria-modal="true" aria-label="방명록" onClick={(event) => event.stopPropagation()}>
+          <div className="ranch-modal-backdrop lb-fade-in" role="presentation" onClick={() => setIsGuestbookModalOpen(false)}>
+            <div className="lb-pop-in ranch-modal" role="dialog" aria-modal="true" aria-label="방명록" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="ranch-modal-close" onClick={() => setIsGuestbookModalOpen(false)} aria-label="닫기">×</button>
               <div className="ranch-guestbook-modal-logo" aria-label={`${user?.nickname || user?.username || user?.uid || '사용자'}의 방명록`}>
                 <span className="ranch-guestbook-modal-owner">
@@ -829,8 +965,8 @@ export default function Ranch() {
         )}
 
         {isMissionModalOpen && (
-          <div className="ranch-modal-backdrop" role="presentation" onClick={() => setIsMissionModalOpen(false)}>
-            <div className="ranch-modal ranch-mission-modal" role="dialog" aria-modal="true" aria-label="미션 목록" onClick={(event) => event.stopPropagation()}>
+          <div className="ranch-modal-backdrop lb-fade-in" role="presentation" onClick={() => setIsMissionModalOpen(false)}>
+            <div className="lb-pop-in ranch-modal ranch-mission-modal" role="dialog" aria-modal="true" aria-label="미션 목록" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="ranch-modal-close" onClick={() => setIsMissionModalOpen(false)} aria-label="닫기">×</button>
               <div className="flex items-center gap-3">
                 <span className="ranch-mission-modal-icon" aria-hidden="true">📜</span>
@@ -876,8 +1012,24 @@ export default function Ranch() {
             </div>
           </div>
         )}
+        {/* 도착 페이드: RanchCamera 바깥 형제로 opacity만 걷는다. 튜토리얼 단계 중에는 z-[110] 타깃만 덮개를
+            뚫고 보이는 어색함을 피하려고 생략한다. 덮개 색은 도감·상점 같은 화면 바탕(ivory-100)과 같게 둔다 —
+            어두운 초록이면 밝은 화면에서 돌아올 때 한 번 어두워졌다가 다시 밝아지는 깜빡임이 보였다(실측). */}
+        <ArrivalVeil
+          color="#F8F4E9"
+          durationMs={240}
+          className="absolute inset-0 z-[60]"
+          disabled={!arrivalVeilAtMount || Boolean(step)}
+        />
       </div>
       <AnnouncementBoard open={isAnnouncementOpen} onClose={() => setIsAnnouncementOpen(false)} />
+      {!isSceneRevealed && !arrivedUnderCurtain && (
+        <RanchSceneCurtain
+          ready={sceneReady}
+          progress={sceneProgress.total ? sceneProgress.loaded / sceneProgress.total : undefined}
+          onGone={handleCurtainGone}
+        />
+      )}
     </MainLayout>
   )
 }

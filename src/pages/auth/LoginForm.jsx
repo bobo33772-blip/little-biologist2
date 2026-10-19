@@ -4,6 +4,9 @@ import { User, Lock } from 'lucide-react'
 import { clearAuthNotice, readAuthNotice, useAuth } from '../../router/AuthContext'
 import { postAuth } from '../../api/auth'
 import AuthToast from './AuthToast'
+import { RANCH_SCENE_IMAGES } from '../../data/insectSpecies'
+import { preloadImages } from '../../utils/preloadImages'
+import { prefetchRoute } from '../../router/routeChunks'
 
 // 이 시간이 지나도 응답이 없으면 서버가 잠에서 깨는 중일 가능성이 크다는 안내를 띄운다.
 const SLOW_HINT_DELAY_MS = 5000
@@ -54,6 +57,9 @@ export default function LoginForm() {
     }
     setStatus('loading')
     setToast(null)
+    // 응답을 기다리는 동안 목장 그림과 JS를 미리 받아 둔다 — 도착하면 목장 준비 커튼이 금방 걷힌다.
+    preloadImages(RANCH_SCENE_IMAGES)
+    prefetchRoute('ranch')
     const slowTimer = window.setTimeout(() => setIsSlow(true), SLOW_HINT_DELAY_MS)
     const result = await postAuth('/api/login', { username: id, password })
     window.clearTimeout(slowTimer)

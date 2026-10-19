@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
+import { preloadImage } from '../../utils/preloadImages'
+import { markSceneReady } from '../../utils/sceneReady'
 
 // 로그인/회원가입 화면이 공유하는 배경·로고·"통째로 같은 비율로 스케일" 로직.
-export const BACKGROUND_SRC = '/images/login/로그인.png'
+// 원본 로그인.png(856KB)를 같은 크기의 WebP(220KB)로 바꿔 쓴다(scripts/convert-scene-images.mjs).
+export const BACKGROUND_SRC = '/images/login/로그인.webp'
 // logo.png는 실제 글자/캐릭터가 위쪽 40%에만 있고 아래 60%가 빈 여백이라
 // 그대로 쓰면 작아 보인다. 콘텐츠 영역만 잘라낸 버전을 사용한다.
 export const LOGO_SRC = '/images/login/logo-cropped.png'
@@ -105,6 +108,9 @@ export function AuthLogo() {
     <img
       src={LOGO_SRC}
       alt="리틀 바이올로지스트"
+      // logo-cropped.png의 실제 크기. 그림이 오기 전에도 비율만큼 자리를 잡아 카드가 아래로 밀리지 않게 한다.
+      width={1401}
+      height={430}
       className="mb-3 w-full h-auto object-contain drop-shadow-lg"
       onError={() => setFailed(true)}
     />
@@ -118,6 +124,11 @@ export function AuthLogo() {
 // 카드 자체는 overflow-hidden이라 스크롤바가 생기지 않는다.
 export function AuthScreen({ children }) {
   const scale = useUniformScale({ designWidth: DESIGN_WIDTH, designHeight: DESIGN_HEIGHT, shiftRatio: SHIFT_RATIO })
+
+  // 로그인 배경까지 다 받아야 첫 장면이 완성된 것으로 보고, 그 뒤에 효과음·배경음 미리받기를 풀어준다.
+  useEffect(() => {
+    preloadImage(BACKGROUND_SRC).then(markSceneReady)
+  }, [])
 
   return (
     <div

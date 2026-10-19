@@ -1,57 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import forestImage from '../../IMAGE/forest.png'
-import pondImage from '../../IMAGE/pond.png'
-import soilImage from '../../IMAGE/soil.png'
-import streetImage from '../../IMAGE/street.png'
-import fieldFlowerImage from '../../IMAGE/field_flower.png'
-import fieldTreeImage from '../../IMAGE/field_tree.png'
 import ZoneBannerOverlay from '../components/features/ZoneBannerOverlay'
 import RanchCamera from '../components/common/RanchCamera'
 import { getHabitatById, getSpeciesByHabitat } from '../data/insectSpecies'
+import { HABITAT_SCENES } from '../data/habitatScenes'
 import { apiUrl } from '../api/base'
-
-const HABITAT_SCENES = {
-  forest: {
-    id: 'forest',
-    name: '숲',
-    images: [forestImage],
-    description: '나무 그늘 아래 숨은 곤충들을 가까이서 관찰할 수 있어요.',
-    accent: 'from-emerald-950/90 via-emerald-900/35 to-ink-950/90',
-  },
-  pond: {
-    id: 'pond',
-    name: '연못·습지',
-    images: [pondImage],
-    description: '물가와 갈대 사이를 따라 이동하는 곤충들을 살펴볼 수 있어요.',
-    accent: 'from-cyan-950/90 via-sky-900/35 to-ink-950/90',
-  },
-  soil: {
-    id: 'soil',
-    name: '흙 속',
-    images: [soilImage],
-    description: '땅 위와 흙 속에 숨어 지내는 곤충들을 발견할 수 있어요.',
-    accent: 'from-amber-950/90 via-stone-900/35 to-ink-950/90',
-  },
-  'street-trees': {
-    id: 'street-trees',
-    name: '가로수',
-    images: [streetImage],
-    description: '가로수 주변을 오가는 곤충들을 도심 풍경 속에서 만나보세요.',
-    accent: 'from-lime-950/90 via-green-900/35 to-ink-950/90',
-  },
-  grass: {
-    id: 'grass',
-    name: '풀밭',
-    images: [fieldFlowerImage, fieldTreeImage],
-    descriptions: [
-      '꽃이 많은 풀밭에서는 꽃을 찾는 곤충들을 먼저 관찰할 수 있어요.',
-      '나무가 섞인 풀밭에서는 가지와 줄기 주변 곤충들까지 이어서 볼 수 있어요.',
-    ],
-    accent: 'from-emerald-950/90 via-lime-900/35 to-ink-950/90',
-  },
-}
+import useImagesReady, { isImageReady } from '../hooks/useImagesReady'
 
 // RanchHabitat.jsx와 같은 배치 좌표를 그대로 쓴다 — 화면 구성(어디에 어떤 크기로 놓이는지)은
 // 누구의 목장이든 동일해야 하고, 실제로 다른 건 "어떤 종이 채워지는가" 뿐이다.
@@ -174,6 +129,7 @@ export default function FriendRanchHabitat() {
   const [isZoneBannerOpen, setIsZoneBannerOpen] = useState(false)
   const [bannerZoneName, setBannerZoneName] = useState(zoneName)
   const [entered, setEntered] = useState(false)
+  const [loadedImage, setLoadedImage] = useState(null)
 
   useEffect(() => {
     if (!uid) return
@@ -199,17 +155,32 @@ export default function FriendRanchHabitat() {
   // 돌아갔다가 다시 들어오는 방식이라 매번 새로 마운트됨) — 그래서 stage/selectedSpeciesId/
   // entered/배너 이름은 초기값으로만 설정하고, 마운트 시 1회 재생되는 등장 애니메이션과
   // 배너 노출 타이밍만 이펙트로 다룬다.
+  const currentImage = scene.images[stage] ?? scene.images[0]
+  // RanchHabitat.jsx와 같은 규칙 — 그림이 준비된 뒤(늦어도 700ms) 입장하고, 배경 img는 받은 뒤 나타난다.
+  const imageReady = useImagesReady([currentImage], { timeoutMs: 700 })
+  const isBackgroundShown = loadedImage === currentImage || isImageReady(currentImage)
+
+  // 로딩 중에는 입장 래퍼가 아직 없으므로, 로딩이 끝난 뒤에 입장을 재생한다.
   useEffect(() => {
-    const id = requestAnimationFrame(() => requestAnimationFrame(() => setEntered(true)))
-    return () => cancelAnimationFrame(id)
-  }, [])
+    if (isLoading || entered || !imageReady) return undefined
+    let innerId = 0
+    const outerId = requestAnimationFrame(() => {
+      innerId = requestAnimationFrame(() => setEntered(true))
+    })
+    return () => {
+      cancelAnimationFrame(outerId)
+      cancelAnimationFrame(innerId)
+    }
+  }, [isLoading, entered, imageReady])
 
   useEffect(() => {
+    if (!entered) return undefined
     const id = window.setTimeout(() => setIsZoneBannerOpen(true), 80)
     return () => window.clearTimeout(id)
-  }, [])
+  }, [entered])
 
-  const currentImage = scene.images[stage] ?? scene.images[0]
+  // 배너는 onClose가 바뀔 때마다 2.1초 타이머를 새로 걸어서, 함수를 고정한다.
+  const closeZoneBanner = useCallback(() => setIsZoneBannerOpen(false), [])
   const currentDescription = scene.descriptions?.[stage] ?? scene.description
   const progressLabel = isSequence ? `${stage + 1} / ${scene.images.length}` : '1 / 1'
   const registeredSpecies = useMemo(
@@ -253,21 +224,23 @@ export default function FriendRanchHabitat() {
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-ink-950 text-sm text-white/70">불러오는 중...</div>
+      <div className="grid min-h-screen place-items-center bg-[#0F1F17] text-sm text-white/70">불러오는 중...</div>
     )
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-ink-950 text-white">
+    // 바탕색: tailwind에 ink-950이 없어 bg-ink-950은 생성되지 않는다.
+    <div className="relative min-h-screen overflow-hidden bg-[#0F1F17] text-white">
       <ZoneBannerOverlay
         zoneName={bannerZoneName}
         isOpen={isZoneBannerOpen}
-        onClose={() => setIsZoneBannerOpen(false)}
+        onClose={closeZoneBanner}
       />
 
       <div
-        className={`absolute inset-0 origin-center transition-all duration-500 ease-out ${
-          entered ? 'scale-100 opacity-100' : 'scale-90 opacity-0'
+        // 다 들어온 뒤에는 scale 유틸리티를 빼서 transform(새 stacking context)을 남기지 않는다.
+        className={`absolute inset-0 origin-center transition-[transform,opacity] duration-[520ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          entered ? 'opacity-100' : 'scale-[1.06] opacity-0'
         }`}
       >
         <RanchCamera>
@@ -277,7 +250,10 @@ export default function FriendRanchHabitat() {
             src={currentImage}
             alt=""
             aria-hidden="true"
-            className="absolute inset-0 h-full w-full object-cover opacity-95 transition-opacity duration-700"
+            onLoad={() => setLoadedImage(currentImage)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+              isBackgroundShown ? 'opacity-95' : 'opacity-0'
+            }`}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/35 to-transparent" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_42%)]" />

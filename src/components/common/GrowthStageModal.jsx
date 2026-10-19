@@ -19,9 +19,10 @@ const COCOON_WRAP_MS = 900 // 실을 감아 고치를 짓는 시간
 const COCOON_REVEAL_HOLD_MS = 700 // 번데기가 다 만들어진 채로 잠깐 멈춰서 보여주는 시간
 
 // 흰 카드 팝업 전에 어둡게 흐려진 배경 위에 사진만 크게 띄우는 공통 레이아웃.
+// 배경은 옅게 나타나기만 한다(lb-fade-in). 안쪽 단계 연출의 시간은 그대로다.
 function RevealBackdrop({ children }) {
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-ink-900/55 p-4 backdrop-blur-md" role="presentation">
+    <div className="lb-fade-in fixed inset-0 z-[100] grid place-items-center bg-ink-900/55 p-4 backdrop-blur-md" role="presentation">
       <div className="relative" style={{ width: 'min(72vw, 380px)', height: 'min(72vw, 380px)' }}>
         {children}
       </div>
@@ -225,10 +226,11 @@ function GrowthStageModalContent({ stageUp, representativeCharacter, onDismiss }
   const image = representativeCharacter ? getRepresentativeCharacterImage(representativeCharacter, stageUp.to) : null
   const isAdult = stageUp.to === 'adult'
 
+  // 사진 연출 뒤에 이어지는 카드면 배경이 이미 어두우므로 다시 페이드하지 않는다(어두운 배경이 한 번 꺼졌다 켜져 보인다).
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-ink-900/45 p-4" role="presentation">
+    <div className={`${hasReveal ? '' : 'lb-fade-in '}fixed inset-0 z-[100] overflow-y-auto bg-ink-900/45 p-4`} role="presentation">
       <div className="flex min-h-full items-center justify-center">
-        <div className="w-full max-w-sm rounded-3xl bg-white p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="growth-stage-title">
+        <div className="lb-pop-in w-full max-w-sm rounded-3xl bg-white p-5 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="growth-stage-title">
           <div className="mb-2 text-3xl" aria-hidden="true">✨</div>
           {image && <img src={image} alt={`${stageLabel} 대표 캐릭터`} className="mx-auto mb-2 h-20 w-20 object-contain" />}
           <p className="text-xs font-semibold text-leaf-700">대표 캐릭터 성장</p>

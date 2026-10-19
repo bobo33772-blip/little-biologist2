@@ -12,11 +12,15 @@ export const SHOW_INSECT_CARD_BACKGROUND = false
 // x/y/scale은 목장 화면(Ranch.jsx)의 "편집" 모드에서 드래그/크기 슬라이더로 조절한 값을
 // 그대로 기본값으로 고정해둔 것 — 편집 모드에서 다시 바꾸면 localStorage override가 이
 // 기본값을 덮어쓴다.
+// imageWidth/imageHeight는 그림 파일의 실제 픽셀 크기다. 대객체 img에 width/height로 넘겨
+// 그림이 오기 전에도 비율만큼 자리를 잡게 한다(늦게 온 그림이 이름표를 밀어내지 않도록).
 export const HABITATS = [
   {
     id: "forest",
     name: "숲",
     image: "/ranch/forest.webp",
+    imageWidth: 900,
+    imageHeight: 600,
     x: 53.13,
     y: 13.22,
     scale: 0.85,
@@ -26,6 +30,8 @@ export const HABITATS = [
     id: "street-trees",
     name: "가로수",
     image: "/ranch/street-trees.webp",
+    imageWidth: 900,
+    imageHeight: 612,
     x: 80.53,
     y: 19.82,
     scale: 0.75,
@@ -35,6 +41,8 @@ export const HABITATS = [
     id: "grass",
     name: "풀밭",
     image: "/ranch/grass.webp",
+    imageWidth: 900,
+    imageHeight: 611,
     x: 81.13,
     y: 65.64,
     scale: 1,
@@ -44,6 +52,8 @@ export const HABITATS = [
     id: "soil",
     name: "흙 속",
     image: "/ranch/soil.webp",
+    imageWidth: 900,
+    imageHeight: 615,
     x: 21.75,
     y: 37.22,
     scale: 1,
@@ -52,13 +62,21 @@ export const HABITATS = [
   {
     id: "pond",
     name: "연못·습지",
-    image: "/ranch/pond.png",
+    // pond.png(1536x1024, 3MB)를 다른 대객체와 같은 폭(900)으로 줄이고 알파 그대로 WebP로 바꾼 그림.
+    // 기존 pond.webp는 비율이 다른 그림이라 쓰지 않는다.
+    image: "/ranch/pond-object.webp",
+    imageWidth: 900,
+    imageHeight: 600,
     x: 53.25,
     y: 44.72,
     scale: 0.95,
     cardBackground: "/card-backgrounds/pond.webp", // 덩쿨(이끼) 텍스처
   },
 ]
+
+// 목장 첫 장면에 필요한 그림(배경 + 흙길 띠 + 대객체 5개). 목장 준비 커튼(Ranch.jsx)은 이 그림들이 준비될 때까지
+// 덮고, 로그인·회원가입은 응답을 기다리는 동안 미리 받는다. 배경 주소는 RanchMapScene과 같아야 한다.
+export const RANCH_SCENE_IMAGES = ["/ranch/background.webp", "/ranch/path-strip.webp", ...HABITATS.map((habitat) => habitat.image)]
 
 export function getHabitatCardBackground(habitatId) {
   if (!SHOW_INSECT_CARD_BACKGROUND) return null

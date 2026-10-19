@@ -1,7 +1,11 @@
+import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import AppHeader from './AppHeader'
 import RanchBackButton from './RanchBackButton'
+import ArrivalVeil from './ArrivalVeil'
 import { getFeatureBackground } from '../../data/featureBackgrounds'
+import { markSceneReady } from '../../utils/sceneReady'
+import { SCENE_TRANSITIONS_ENABLED } from '../../utils/motion'
 
 // AGENTS.md §11 / screen-requirements.md: 도감·퀘스트·AI말벗 등은
 // '목장으로 돌아가기' 중심의 집중형 내비게이션을 사용하고, 전체 사이드바를 복원하지 않는다.
@@ -10,6 +14,13 @@ import { getFeatureBackground } from '../../data/featureBackgrounds'
 export default function FocusedLayout({ title, icon, iconSrc, actions, backTo, backLabel, children }) {
   const location = useLocation()
   const backgroundImage = getFeatureBackground(location.pathname)
+
+  // 기능 화면으로 바로 들어온 경우의 첫 장면 신호. 화면마다 그림이 제각각이라 그림 로드 대신
+  // 1초를 기다린 뒤 효과음·배경음 미리받기를 풀어준다(이미 신호가 나갔으면 아무 일도 없다).
+  useEffect(() => {
+    const timer = window.setTimeout(markSceneReady, 1000)
+    return () => window.clearTimeout(timer)
+  }, [])
 
   return (
     <div className="relative isolate flex min-h-screen flex-col overflow-hidden">
@@ -43,6 +54,9 @@ export default function FocusedLayout({ title, icon, iconSrc, actions, backTo, b
           {children}
         </div>
       </main>
+      {/* 도착 페이드: 이미 그려진 화면 위에서 아이보리 덮개만 걷는다. 루트의 isolate 안 z-[1]이라 새 쌓임 맥락을
+          만들지 않고, body portal(결과 팝업·튜토리얼 대역 버튼·공지)은 덮지 않는다. */}
+      <ArrivalVeil color="#F8F4E9" durationMs={200} className="fixed inset-0 z-[1]" disabled={!SCENE_TRANSITIONS_ENABLED} />
     </div>
   )
 }

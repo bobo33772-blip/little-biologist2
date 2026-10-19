@@ -85,7 +85,7 @@ export default function FriendRanch() {
 
   return (
     <MainLayout showHeader={false} showBottomNav={false}>
-      <div className="relative h-screen min-h-0 overflow-hidden bg-ink-950">
+      <div className="relative h-screen min-h-0 overflow-hidden bg-[#0F1F17]">
         {isLoading ? (
           <p className="grid h-full place-items-center text-sm text-white/70">목장을 불러오는 중...</p>
         ) : !ranch ? (
@@ -98,6 +98,7 @@ export default function FriendRanch() {
               positions={ranch.positions}
               scales={ranch.scales}
               onSelect={(h) => navigate(`/friends/ranch/${uid}/${h.id}`)}
+              habitatRouteKey="friendRanchHabitat"
             />
             <PlacedItemsLayer placements={ranch.placements} isEditing={false} onSelect={() => {}} />
           </RanchCamera>
@@ -159,8 +160,8 @@ export default function FriendRanch() {
         </div>
 
         {isGuestbookOpen && (
-          <div className="ranch-modal-backdrop" role="presentation" onClick={() => setIsGuestbookOpen(false)}>
-            <div className="ranch-modal" role="dialog" aria-modal="true" aria-label="방명록" onClick={(event) => event.stopPropagation()}>
+          <div className="ranch-modal-backdrop lb-fade-in" role="presentation" onClick={() => setIsGuestbookOpen(false)}>
+            <div className="lb-pop-in ranch-modal" role="dialog" aria-modal="true" aria-label="방명록" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="ranch-modal-close" onClick={() => setIsGuestbookOpen(false)} aria-label="닫기">×</button>
               <div className="ranch-guestbook-modal-logo" aria-label={`${ranch?.nickname ?? '친구'}의 방명록`}>
                 <span className="ranch-guestbook-modal-owner">{ranch?.nickname ?? '친구'}의</span>
@@ -203,8 +204,8 @@ export default function FriendRanch() {
         )}
 
         {isProfileModalOpen && ranch && (
-          <div className="ranch-modal-backdrop" role="presentation" onClick={() => setIsProfileModalOpen(false)}>
-            <div className="ranch-modal ranch-profile-modal" role="dialog" aria-modal="true" aria-label="탐험가 정보" onClick={(event) => event.stopPropagation()}>
+          <div className="ranch-modal-backdrop lb-fade-in" role="presentation" onClick={() => setIsProfileModalOpen(false)}>
+            <div className="lb-pop-in ranch-modal ranch-profile-modal" role="dialog" aria-modal="true" aria-label="탐험가 정보" onClick={(event) => event.stopPropagation()}>
               <button type="button" className="ranch-modal-close" onClick={() => setIsProfileModalOpen(false)} aria-label="닫기">×</button>
               <div className="ranch-profile-modal-hero">
                 <div className="relative">

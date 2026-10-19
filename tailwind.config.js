@@ -3,6 +3,11 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      screens: {
+        // 폰을 가로로 든 낮은 화면(높이 500px 이하). 세로로 쌓던 안내 창이 393px 높이를 넘어 버튼이
+        // 잘리던 곳을 이 화면에서만 납작하게 바꾼다. 기본 화면들(sm 등)보다 뒤에 붙어서 같은 속성을 덮는다.
+        short: { raw: '(orientation: landscape) and (max-height: 500px)' },
+      },
       colors: {
         // design-guidelines.md: 아이보리/연한 베이지 기반 + 초록색 주요 액션 컬러
         ivory: {

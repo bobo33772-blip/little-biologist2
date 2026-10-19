@@ -65,21 +65,23 @@ export default function EggFirstRevealEffect({ trigger, representativeCharacter,
         </div>
       )}
 
+      {/* 안내 모달은 RanchCamera 안의 z-[110] 백드롭 자체라, transform 없이 opacity로만 나타난다. */}
       {isIntroOpen && (
-        <div className="fixed inset-0 z-[110] grid place-items-center bg-ink-900/45 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="알 획득 안내">
-          <div className="egg-grant-modal w-full max-w-sm overflow-hidden rounded-[1.75rem] bg-amber-50 text-center shadow-2xl ring-2 ring-lime-200 sm:max-w-md">
-            <div className="bg-gradient-to-b from-lime-200 to-amber-50 px-5 pb-4 pt-6 sm:px-7">
+        <div className="lb-fade-in fixed inset-0 z-[110] grid place-items-center bg-ink-900/45 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="알 획득 안내">
+          {/* 폰 가로(short, 높이 500px 이하)에서는 알 그림·여백을 줄여 '확인' 버튼까지 한 화면에 들어오게 한다. */}
+          <div className="egg-grant-modal w-full max-w-sm overflow-hidden rounded-[1.75rem] bg-amber-50 text-center shadow-2xl ring-2 ring-lime-200 sm:max-w-md short:max-w-md">
+            <div className="bg-gradient-to-b from-lime-200 to-amber-50 px-5 pb-4 pt-6 sm:px-7 short:pb-2 short:pt-3">
               <p className="text-sm font-black text-leaf-700">새로운 친구가 찾아왔어요</p>
               <h2 className="mt-1 text-2xl font-black text-ink-900">알을 얻었습니다.</h2>
             </div>
 
             <div className="px-5 pb-5 sm:px-7">
-              <div className="relative mx-auto -mt-1 grid h-40 w-40 place-items-center sm:h-44 sm:w-44">
+              <div className="relative mx-auto -mt-1 grid h-40 w-40 place-items-center sm:h-44 sm:w-44 short:h-24 short:w-24">
                 <span className="absolute inset-x-8 bottom-5 h-5 rounded-full bg-ink-900/10 blur-sm" aria-hidden="true" />
                 <img src={eggImage} alt="새로 얻은 알" className="egg-grant-modal__egg relative h-full w-full object-contain" />
               </div>
 
-              <section className="relative mt-2 rounded-2xl border-2 border-lime-200 bg-white/90 px-4 py-4 text-left shadow-sm">
+              <section className="relative mt-2 rounded-2xl border-2 border-lime-200 bg-white/90 px-4 py-4 text-left shadow-sm short:py-2.5">
                 <span className="absolute -top-3 left-1/2 h-5 w-5 -translate-x-1/2 rotate-45 border-l-2 border-t-2 border-lime-200 bg-white" aria-hidden="true" />
                 <h3 className="text-lg font-black text-ink-900">리틀 바이올로지스트에 온 걸 환영해!</h3>
                 <p className="mt-2 text-sm font-bold leading-6 text-ink-700/85">
@@ -90,7 +92,7 @@ export default function EggFirstRevealEffect({ trigger, representativeCharacter,
               <button
                 type="button"
                 onClick={closeIntro}
-                className="mt-5 w-full rounded-full bg-leaf-500 px-4 py-3 text-base font-black text-white shadow-md transition hover:bg-leaf-600 active:scale-95"
+                className="mt-5 w-full rounded-full bg-leaf-500 px-4 py-3 text-base font-black text-white shadow-md transition hover:bg-leaf-600 active:scale-95 short:mt-3 short:py-2.5"
               >
                 확인
               </button>

@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { playSfx, primeSfx } from '../../utils/sound'
+import { playSfx } from '../../utils/sound'
 import { SFX } from '../../utils/sfx'
 
 export default function ButtonSoundController() {
   useEffect(() => {
-    primeSfx(SFX.buttonDefault)
-
+    // 버튼음 미리받기는 SoundAssetPreloader가 첫 장면 뒤에 맨 먼저 한다. 여기서 마운트하자마자
+    // 받으면 첫 화면의 JS·그림과 회선을 다툰다.
     const handleClick = (event) => {
       const target = event.target
       if (!(target instanceof Element)) return

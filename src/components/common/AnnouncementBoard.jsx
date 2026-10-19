@@ -16,9 +16,10 @@ export default function AnnouncementBoard({ open, onClose }) {
     onClose()
   }
 
+  // 게시판은 시트처럼 아래에서 올라온다(등장만, 닫을 때는 바로 사라진다).
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink-900/50 p-4" role="presentation" onClick={closeBoard}>
-      <section role="dialog" aria-modal="true" aria-labelledby="announcement-board-title" className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-ivory-50 shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+    <div className="lb-fade-in fixed inset-0 z-[9999] flex items-center justify-center bg-ink-900/50 p-4" role="presentation" onClick={closeBoard}>
+      <section role="dialog" aria-modal="true" aria-labelledby="announcement-board-title" className="lb-sheet-up flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-ivory-50 shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex shrink-0 items-center justify-between border-b border-ivory-200 bg-white px-5 py-4">
           {isDetailOpen ? <button type="button" onClick={() => setIsDetailOpen(false)} className="-ml-2 grid h-9 w-9 place-items-center rounded-full hover:bg-ivory-100" aria-label="공지 목록으로 돌아가기"><ChevronLeft size={21} /></button> : <span className="w-9" aria-hidden="true" />}
           <h2 id="announcement-board-title" className="text-base font-black text-ink-900">{isDetailOpen ? '공지사항' : '게시판'}</h2>
